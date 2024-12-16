@@ -1,0 +1,18 @@
+# Ignore VSCode settings + macOS
+.vscode/
+.DS_Store
+
+# Ignore Python cache and virtual environment
+__pycache__/
+venv/
+*.pyc
+
+# Ignore Build files
+build/
+dist/
+
+# Ignore environment files
+.env
+
+# ignore zip files
+*.zip
