@@ -2,10 +2,10 @@
 
 
 a = Analysis(
-    ['archimmich.py'],
-    pathex=[],
+    ['src/main.py'],
+    pathex=['src'],
     binaries=[],
-    datas=[('resources/*', 'resources')],
+    datas=[('src/resources/*', 'resources')],
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -32,7 +32,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['favicon-180.png'],
+    icon=['src/resources/favicon-180.png'],
 )
 coll = COLLECT(
     exe,
@@ -46,6 +46,6 @@ coll = COLLECT(
 app = BUNDLE(
     coll,
     name='Archimmich.app',
-    icon='./favicon-180.png',
+    icon='src/resources/favicon-180.png',
     bundle_identifier=None,
 )
