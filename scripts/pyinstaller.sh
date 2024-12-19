@@ -2,8 +2,9 @@ pyinstaller \
   --onedir \
   --windowed \
   --optimize "2" \
-  --icon=../favicon-180.png \
-  --add-data "resources/*:resources" \
+  --icon="src/resources/favicon-180.png" \
+  --add-data "src/resources/*:src/resources" \
   --distpath "dist" \
-  --name "Archimmich" \
-  archimmich.py;
+  --paths="src" \
+  --name "ArchImmich" \
+  src/main.py;
