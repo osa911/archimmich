@@ -3,6 +3,10 @@
 [![GitHub stars](https://img.shields.io/github/stars/osa911/archimmich)](https://github.com/osa911/archimmich/stargazers)
 **ArchImmich** is a modern export and archive tool designed for users of the Immich platform. This application simplifies the process of fetching media buckets and exporting them into archives, all while offering a sleek and user-friendly interface.
 
+<div align="center">
+    <img src="https://github.com/user-attachments/assets/8df9d3eb-acf4-4812-89eb-68a3be9d1848" alt="ArchImmich UI">
+</div>
+
 ---
 
 ## **Features**
@@ -60,22 +64,20 @@ Make sure you have **Python 3.7 or higher** installed. Then, set up your virtual
      ```
 
 3. **Install the required packages**:
+
    ```bash
    pip install -r requirements.txt
    ```
 
-If the `requirements.txt` file is missing or incomplete, manually install the necessary libraries:
-
-```bash
-pip install PyQt5 requests tqdm
-```
+4. **Configure the .env file**:
+   - Create a `.env` file in the root directory from the provided `.env.example` file.
 
 ### **3. Run the Application**
 
 Start the application with:
 
 ```bash
-python3 archimmich.py
+python3 src/main.py
 ```
 
 ---
@@ -93,7 +95,7 @@ To package the application into a standalone executable:
 2. **Build the Executable**:
 
    ```bash
-   pyinstaller --onefile --icon=your_icon.ico archimmich.py
+   sh scripts/build.sh
    ```
 
 3. The executable will be available in the `dist` folder.
@@ -127,7 +129,7 @@ To package the application into a standalone executable:
 
 ## **Screenshots**
 
-_Add screenshots here to showcase the UI and features._
+@osa911 add screenshots here
 
 ---
 
