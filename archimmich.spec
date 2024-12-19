@@ -21,7 +21,7 @@ exe = EXE(
     a.scripts,
     [('O', None, 'OPTION'), ('O', None, 'OPTION')],
     exclude_binaries=True,
-    name='Archimmich',
+    name='ArchImmich',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -41,11 +41,11 @@ coll = COLLECT(
     strip=False,
     upx=True,
     upx_exclude=[],
-    name='Archimmich',
+    name='ArchImmich',
 )
 app = BUNDLE(
     coll,
-    name='Archimmich.app',
+    name='ArchImmich.app',
     icon='src/resources/favicon-180.png',
     bundle_identifier=None,
 )
