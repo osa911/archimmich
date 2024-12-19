@@ -254,6 +254,7 @@ class MainWindow(QMainWindow):
         self.divider1.hide()
         self.divider2.hide()
         self.archives_display.hide()
+        self.current_download_progress_bar.hide()
 
         self.log("You have been logged out.")
         self.buckets = []
