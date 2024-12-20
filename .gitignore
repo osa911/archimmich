@@ -10,6 +10,7 @@ venv/
 # Ignore Build files
 build/
 dist/
+release/
 
 # Ignore environment files
 .env
