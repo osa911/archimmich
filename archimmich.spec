@@ -2,7 +2,7 @@
 
 
 a = Analysis(
-    ['src\\main.py'],
+    ['src/main.py'],
     pathex=['src'],
     binaries=[],
     datas=[('src/resources/*', 'src/resources')],
@@ -32,7 +32,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['src\\resources\\favicon-180.png'],
+    icon=['src/resources/favicon-180.png'],
 )
 coll = COLLECT(
     exe,
