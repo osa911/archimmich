@@ -1,5 +1,6 @@
 import os
 import sys
+import json
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QPainter, QBrush, QColor
 from PIL import Image, ImageOps
@@ -61,7 +62,6 @@ def display_avatar(app_window, fetch_avatar):
     except Exception as e:
         app_window.logs.append(f"Failed to process avatar image: {str(e)}")
 
-
 def render_default_avatar(app_window):
     """Draws a default circular avatar with a simple person silhouette."""
     size = min(app_window.avatar_label.width(), app_window.avatar_label.height())
@@ -111,3 +111,26 @@ def render_default_avatar(app_window):
 
     app_window.avatar_label.setPixmap(pixmap)
     app_window.logs.append("Default avatar displayed.")
+
+CONFIG_FILE = "archimich_config.json"
+
+def save_settings(server_ip, api_key):
+    settings = {
+        "server_ip": server_ip,
+        "api_key": api_key
+    }
+    with open(CONFIG_FILE, "w") as config_file:
+        json.dump(settings, config_file)
+    print("Settings saved successfully.")
+
+
+def load_settings():
+    if os.path.exists(CONFIG_FILE):
+        with open(CONFIG_FILE, "r") as config_file:
+            try:
+                settings = json.load(config_file)
+                return settings.get("server_ip", ""), settings.get("api_key", "")
+            except json.JSONDecodeError:
+                print("Error decoding configuration file. Resetting settings.")
+                return "", ""
+    return "", ""

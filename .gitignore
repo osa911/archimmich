@@ -17,3 +17,6 @@ release/
 
 # ignore zip files
 *.zip
+
+# Ignore rest of the files
+archimich_config.json

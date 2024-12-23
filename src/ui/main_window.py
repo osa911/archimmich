@@ -3,10 +3,10 @@ from PyQt5.QtWidgets import (
     QComboBox, QPushButton, QFileDialog, QWidget, QProgressBar, QSpacerItem, QSizePolicy, QHBoxLayout
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QIntValidator, QGuiApplication, QPixmap, QIcon
+from PyQt5.QtGui import QIntValidator, QGuiApplication, QPixmap
 
 from src.ui.components.auto_scroll_text_edit import AutoScrollTextEdit
-from src.utils.helpers import display_avatar, get_resource_path
+from src.utils.helpers import display_avatar, get_resource_path, load_settings
 from src.managers.login_manager import LoginManager
 from src.managers.export_manager import ExportManager
 
@@ -32,40 +32,71 @@ class MainWindow(QMainWindow):
 
         # UI Initialization
         self.setup_ui()
+        self.load_saved_settings()
 
         self.buckets = []
         self.output_dir = ""
 
-    def setup_ui(self):
+    def load_saved_settings(self):
+        # Load saved settings on startup
+        server_ip, api_key = load_settings()
+        if server_ip and api_key:
+            self.server_ip_field.setText(server_ip)
+            self.api_key_field.setText(api_key)
+            self.is_remember_me_checkbox.setChecked(True)
+
+    def init_main_logo_layout(self):
         # Add Logo
-        self.image_label = QLabel()
+        image_label = QLabel()
         pixmap = QPixmap(get_resource_path("src/resources/immich-logo.svg"))
-        self.image_label.setPixmap(pixmap)
-        self.image_label.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
-        self.image_label.setScaledContents(True)
-        self.image_label.setFixedSize(132, 45)
+        image_label.setPixmap(pixmap)
+        image_label.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        image_label.setScaledContents(True)
+        image_label.setFixedSize(132, 45)
 
-        self.image_layout = QHBoxLayout()
-        self.image_layout.addWidget(self.image_label)
-        self.image_layout.setAlignment(Qt.AlignHCenter)
-        self.layout.addLayout(self.image_layout)
+        layout = QHBoxLayout()
+        layout.addWidget(image_label)
+        layout.setAlignment(Qt.AlignHCenter)
+        return layout
 
+    def init_login_widget(self):
         # Login Fields
+        self.login_widget = QWidget()
+        self.login_layout = QVBoxLayout(self.login_widget)
+
+        # Server IP Field
         self.server_ip_label = QLabel("Server IP:")
         self.server_ip_field = QLineEdit()
         self.server_ip_field.setPlaceholderText("Enter server IP (e.g., http://192.168.1.1:2283)")
-        self.layout.addWidget(self.server_ip_label)
-        self.layout.addWidget(self.server_ip_field)
+        self.login_layout.addWidget(self.server_ip_label)
+        self.login_layout.addWidget(self.server_ip_field)
 
+        # API Key Field
         self.api_key_label = QLabel("API Key:")
         self.api_key_field = QLineEdit()
         self.api_key_field.setPlaceholderText("Enter API key")
-        self.layout.addWidget(self.api_key_label)
-        self.layout.addWidget(self.api_key_field)
+        self.login_layout.addWidget(self.api_key_label)
+        self.login_layout.addWidget(self.api_key_field)
 
-        self.login_button = QPushButton("Login")
-        self.login_button.clicked.connect(self.login)
-        self.layout.addWidget(self.login_button)
+        # Remember Me Checkbox
+        self.is_remember_me_checkbox = QCheckBox("Remember me")
+        self.login_layout.addWidget(self.is_remember_me_checkbox)
+
+        # Login Button
+        login_button = QPushButton("Login")
+        login_button.clicked.connect(self.login)
+        self.login_layout.addWidget(login_button)
+
+        return self.login_widget
+
+    def reset_login_fields(self):
+        self.api_key_field.setText("")
+        self.server_ip_field.setText("")
+        self.is_remember_me_checkbox.setChecked(False)
+
+    def setup_ui(self):
+        self.layout.addLayout(self.init_main_logo_layout())
+        self.layout.addWidget(self.init_login_widget())
 
         # Avatar and Login Status
         self.avatar_text_container = QWidget()
@@ -240,8 +271,7 @@ class MainWindow(QMainWindow):
         # Reset UI Elements
         self.login_status.setText("")
         self.login_status.setStyleSheet("color: red;")
-        self.api_key_field.setText("")
-        self.server_ip_field.setText("")
+        self.reset_login_fields()
         self.config_section.hide()
         self.fetch_button.hide()
         self.export_button.hide()
@@ -260,11 +290,7 @@ class MainWindow(QMainWindow):
         self.buckets = []
         self.output_dir = ""
 
-        self.api_key_label.show()
-        self.api_key_field.show()
-        self.server_ip_label.show()
-        self.server_ip_field.show()
-        self.login_button.show()
+        self.login_widget.show()
         self.logout_button.hide()
 
     def get_archive_size_in_bytes(self):
@@ -331,7 +357,7 @@ class MainWindow(QMainWindow):
         server_ip = self.server_ip_field.text().strip()
         api_key = self.api_key_field.text().strip()
 
-        self.login_manager.set_credentials(server_ip, api_key)
+        self.login_manager.set_credentials(server_ip, api_key, self.is_remember_me_checkbox.isChecked())
         try:
             user = self.login_manager.login()
             user_name = user.get('name', 'Unknown User')
@@ -349,11 +375,7 @@ class MainWindow(QMainWindow):
             self.avatar_label.show()
             self.avatar_text_container.show()
 
-            self.api_key_label.hide()
-            self.api_key_field.hide()
-            self.server_ip_label.hide()
-            self.server_ip_field.hide()
-            self.login_button.hide()
+            self.login_widget.hide()
 
             self.config_section.show()
             self.fetch_button.show()
