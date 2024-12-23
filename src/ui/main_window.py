@@ -166,7 +166,7 @@ class MainWindow(QMainWindow):
         self.divider1 = QFrame(self)
         self.divider1.setFrameShape(QFrame.HLine)
         self.divider1.setFrameShadow(QFrame.Sunken)
-        self.divider1.setStyleSheet("background-color: lightgray;")
+        self.divider1.setStyleSheet("background-color: '#ededed';")
         self.divider1.hide()
         self.layout.addWidget(self.divider1)
 
