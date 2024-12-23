@@ -191,6 +191,12 @@ class MainWindow(QMainWindow):
         self.export_button.hide()
         self.layout.addWidget(self.export_button)
 
+        self.stop_button = QPushButton("Stop Export")
+        self.stop_button.setStyleSheet("background-color: '#f44336'; color: white;")
+        self.stop_button.clicked.connect(self.stop_export)
+        self.stop_button.hide()
+        self.layout.addWidget(self.stop_button)
+
         self.current_download_progress_bar = QProgressBar(self)
         self.current_download_progress_bar.setRange(0, 100)
         self.current_download_progress_bar.setFormat("Current Download: 0%")
@@ -229,12 +235,6 @@ class MainWindow(QMainWindow):
         self.archives_display.hide()
         self.layout.addWidget(self.archives_display)
 
-        self.stop_button = QPushButton("Stop Export")
-        self.stop_button.setStyleSheet("background-color: '#f44336'; color: white;")
-        self.stop_button.clicked.connect(self.stop_export)
-        self.stop_button.hide()
-        self.layout.addWidget(self.stop_button)
-
         self.divider2 = QFrame(self)
         self.divider2.setFrameShape(QFrame.HLine)
         self.divider2.setFrameShadow(QFrame.Sunken)
@@ -257,6 +257,8 @@ class MainWindow(QMainWindow):
     def stop_export(self):
         self.log("Stop requested. Stopping export process...")
         self.stop_requested = True
+        self.stop_button.hide()
+        self.export_button.show()
 
     def stop_flag(self):
         return self.stop_requested
@@ -447,85 +449,110 @@ class MainWindow(QMainWindow):
         else:
             self.log("No output directory set. Please choose an output directory first.")
 
-    def start_export(self):
-        self.log("Starting export process...")
-        self.stop_requested = False
-        self.stop_button.show()
-
-        selected_buckets = [
+    def get_selected_buckets(self):
+        return [
             self.bucket_list_layout.itemAt(i).widget().objectName()
             for i in range(1, self.bucket_list_layout.count())
             if isinstance(self.bucket_list_layout.itemAt(i).widget(), QCheckBox) and
             self.bucket_list_layout.itemAt(i).widget().isChecked()
         ]
 
-        if not selected_buckets:
-            self.log("Error: No buckets selected for export.")
-            self.stop_button.hide()
-            return
-
-        total_buckets = len(selected_buckets)
-        self.progress_bar.setRange(0, total_buckets)
+    def setup_progress_bar(self, total):
+        self.progress_bar.setRange(0, total)
         self.progress_bar.setValue(0)
         self.progress_bar.setTextVisible(True)
         self.progress_bar.setFormat("Overall Progress: 0%")
         self.progress_bar.show()
 
-        self.log(f"Total buckets to process: {total_buckets}")
-
-        inputs = self.get_user_input_values()
-        archive_size_bytes = self.get_archive_size_in_bytes()
-
+    def process_buckets_individually(self, selected_buckets, inputs, archive_size_bytes):
         for i, time_bucket in enumerate(selected_buckets, start=1):
             if self.stop_flag():
                 self.log("Export stopped by user.")
                 break
 
             bucket_name = self.export_manager.format_time_bucket(time_bucket, inputs["size"])
-            self.log(f"Processing bucket {i}/{total_buckets}: {bucket_name}")
+            self.log(f"Processing bucket {i}/{len(selected_buckets)}: {bucket_name}")
 
-            assets = self.export_manager.get_timeline_bucket_assets(
-                time_bucket,
-                is_archived=inputs["isArchived"],
-                size=inputs["size"],
-                with_partners=inputs["withPartners"],
-                with_stacked=inputs["withStacked"]
-            )
-            if self.stop_flag():
-                self.log("Export stopped by user during image fetch.")
-                break
-
-            asset_ids = [a['id'] for a in assets]
-            asset_count = len(asset_ids)
-            if asset_count == 0:
-                self.log(f"No images found for bucket: {bucket_name}")
-                self.progress_bar.setValue(i)
-                self.progress_bar.setFormat(f"Overall Progress: {int((i / total_buckets) * 100)}%")
-                QApplication.processEvents()
+            asset_ids = self.fetch_assets_for_bucket(time_bucket, inputs)
+            if not asset_ids:
+                self.log(f"No assets found for bucket: {bucket_name}")
+                self.update_progress_bar(i, len(selected_buckets))
                 continue
 
-            archive_info = self.export_manager.prepare_archive(asset_ids, archive_size_bytes)
-            if self.stop_flag():
-                self.log("Export stopped by user during archive preparation.")
-                break
+            self.download_and_save_archive(asset_ids, bucket_name, archive_size_bytes)
+            self.update_progress_bar(i, len(selected_buckets))
 
-            total_size = archive_info["totalSize"]
-            self.log(f"Preparing archive: Total size = {self.export_manager.format_size(total_size)} ({asset_count} assets)")
+    def process_all_buckets_combined(self, selected_buckets, inputs, archive_size_bytes):
+        all_asset_ids = []
+        for time_bucket in selected_buckets:
+            asset_ids = self.fetch_assets_for_bucket(time_bucket, inputs)
+            all_asset_ids.extend(asset_ids)
 
-            self.export_manager.download_archive(asset_ids, bucket_name, total_size, self.current_download_progress_bar)
-            if self.stop_flag():
-                self.log("Export stopped by user during archive download.")
-                break
+        if not all_asset_ids:
+            self.log("No assets found in selected buckets.")
+            return
 
-            # Add archive info to the archive display
-            self.archives_display.show()
-            self.archives_display.append(f"{bucket_name}.zip")
+        self.download_and_save_archive(all_asset_ids, "Combined_Archive", archive_size_bytes)
 
-            self.progress_bar.setValue(i)
-            percentage = int((i / total_buckets) * 100)
-            self.progress_bar.setFormat(f"Overall Progress: {percentage}%")
-            QApplication.processEvents()
+    def fetch_assets_for_bucket(self, time_bucket, inputs):
+        assets = self.export_manager.get_timeline_bucket_assets(
+            time_bucket,
+            is_archived=inputs["isArchived"],
+            size=inputs["size"],
+            with_partners=inputs["withPartners"],
+            with_stacked=inputs["withStacked"]
+        )
+        if self.stop_flag():
+            self.log("Export stopped by user during image fetch.")
+            return []
+        return [a['id'] for a in assets]
 
+    def download_and_save_archive(self, asset_ids, archive_name, archive_size_bytes):
+        archive_info = self.export_manager.prepare_archive(asset_ids, archive_size_bytes)
+        total_size = archive_info["totalSize"]
+        self.log(f"Preparing archive: Total size = {self.export_manager.format_size(total_size)}")
+
+        self.export_manager.download_archive(
+            asset_ids, archive_name, total_size, self.current_download_progress_bar
+        )
+        self.archives_display.show()
+        self.archives_display.append(f"{archive_name}.zip")
+
+    def update_progress_bar(self, current, total):
+        self.progress_bar.setValue(current)
+        percentage = int((current / total) * 100)
+        self.progress_bar.setFormat(f"Overall Progress: {percentage}%")
+        QApplication.processEvents()
+
+    def finalize_export(self):
         self.log("Export completed successfully or stopped.")
         self.stop_button.hide()
+        self.export_button.show()
         self.archives_section.show()
+
+    def start_export(self):
+        self.log("Starting export process...")
+        self.stop_requested = False
+        self.export_button.hide()
+        self.stop_button.show()
+
+        selected_buckets = self.get_selected_buckets()
+        if not selected_buckets:
+            self.log("Error: No buckets selected for export.")
+            self.stop_button.hide()
+            self.export_button.show()
+            return
+
+        self.setup_progress_bar(len(selected_buckets))
+        self.log(f"Total buckets to process: {len(selected_buckets)}")
+
+        inputs = self.get_user_input_values()
+        archive_size_bytes = self.get_archive_size_in_bytes()
+        download_option = self.download_by_combo.currentText()
+
+        if download_option == f"Per {inputs['size'].capitalize()}":
+            self.process_buckets_individually(selected_buckets, inputs, archive_size_bytes)
+        elif download_option == "Single Archive":
+            self.process_all_buckets_combined(selected_buckets, inputs, archive_size_bytes)
+
+        self.finalize_export()
