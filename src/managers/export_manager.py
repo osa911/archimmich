@@ -110,9 +110,13 @@ class ExportManager:
         return f"{gb_size:.2f} GB ({mb_size:.2f} MB)"
 
     @staticmethod
-    def format_time_bucket(time_bucket):
+    def format_time_bucket(time_bucket, format="MONTH"):
         date_obj = datetime.fromisoformat(time_bucket.replace("Z", "+00:00"))
-        return date_obj.strftime("%B_%Y")
+
+        if format.upper() == "DAY":
+            return date_obj.strftime("%d.%m.%Y")
+        else:
+            return date_obj.strftime("%B_%Y")
 
     @staticmethod
     def calculate_file_checksum(file_path):

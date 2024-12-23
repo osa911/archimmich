@@ -423,9 +423,10 @@ class MainWindow(QMainWindow):
             widget = self.bucket_list_layout.itemAt(i).widget()
             if widget and widget != self.select_all_checkbox:
                 widget.deleteLater()
+        inputs = self.get_user_input_values()
 
         for bucket in buckets:
-            bucket_name = self.export_manager.format_time_bucket(bucket['timeBucket'])
+            bucket_name = self.export_manager.format_time_bucket(bucket['timeBucket'], inputs["size"])
             asset_count = bucket['count']
             asset_text = "asset" if asset_count == 1 else "assets"
             checkbox = QCheckBox(f"{bucket_name} | ({asset_count} {asset_text})")
@@ -480,7 +481,7 @@ class MainWindow(QMainWindow):
                 self.log("Export stopped by user.")
                 break
 
-            bucket_name = self.export_manager.format_time_bucket(time_bucket)
+            bucket_name = self.export_manager.format_time_bucket(time_bucket, inputs["size"])
             self.log(f"Processing bucket {i}/{total_buckets}: {bucket_name}")
 
             assets = self.export_manager.get_timeline_bucket_assets(
