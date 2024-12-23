@@ -129,7 +129,9 @@ To package the application into a standalone executable:
 
 ## **Screenshots**
 
-@osa911 add screenshots here
+| light theme  | dark theme  |
+|---|---|
+| ![image](https://github.com/user-attachments/assets/aa5f42ae-a4fd-4ecb-b3c9-12e9b55886e7) | ![image](https://github.com/user-attachments/assets/fa0179fd-c3cd-4dc8-9b28-6259b2192c1a) |
 
 ---
 
