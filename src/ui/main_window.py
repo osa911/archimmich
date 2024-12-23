@@ -312,7 +312,7 @@ class MainWindow(QMainWindow):
             self.output_dir_label.setStyleSheet("")
         else:
             self.log("No directory selected.")
-            self.output_dir_label.setText("<span style='color: red;'>Output Directory * (required):</span>")
+            self.output_dir_label.setText("<span style='color: red;'>* Output Directory (required):</span>")
 
     def validate_login_inputs(self):
         is_valid = True
@@ -335,7 +335,6 @@ class MainWindow(QMainWindow):
         is_valid = True
         self.archive_size_label.setStyleSheet("")
         self.archive_size_field.setStyleSheet("")
-        self.output_dir_label.setText("<span><span style='color: red;'>*</span> Output Directory: </span>")
 
         archive_size_bytes = self.get_archive_size_in_bytes()
         if archive_size_bytes is None:
