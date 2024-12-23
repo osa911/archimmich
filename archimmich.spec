@@ -1,12 +1,23 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_dynamic_libs
+from PyInstaller.utils.hooks import collect_all
+
+datas = [('src/resources/*', 'src/resources')]
+binaries = []
+hiddenimports = []
+binaries += collect_dynamic_libs('_internal')
+tmp_ret = collect_all('PyQt5')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
+tmp_ret = collect_all('requests')
+datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
 
 a = Analysis(
-    ['src/main.py'],
+    ['src\\main.py'],
     pathex=['src'],
-    binaries=[],
-    datas=[('src/resources/*', 'src/resources')],
-    hiddenimports=[],
+    binaries=binaries,
+    datas=datas,
+    hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -32,7 +43,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['src/resources/favicon-180.png'],
+    icon=['src\\resources\\favicon-180.png'],
 )
 coll = COLLECT(
     exe,

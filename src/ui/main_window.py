@@ -10,7 +10,7 @@ from src.utils.helpers import display_avatar, get_resource_path, load_settings
 from src.managers.login_manager import LoginManager
 from src.managers.export_manager import ExportManager
 
-VERSION = "0.0.1"
+VERSION = "0.0.2"
 
 class MainWindow(QMainWindow):
     def __init__(self):
