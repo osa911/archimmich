@@ -77,6 +77,7 @@ class ExportManager:
 
         downloaded_size = 0
         start_time = time.time()
+        last_logged_progress = 0
 
         with open(archive_path, "wb") as archive_file:
             for chunk in response.iter_content(chunk_size=8192):
@@ -91,17 +92,22 @@ class ExportManager:
                         current_download_progress_bar.setValue(progress)
                         current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - {progress}%")
 
-                    # Log and update UI
-                    elapsed_time = time.time() - start_time
-                    if elapsed_time > 0:
-                        speed_mb = (downloaded_size / elapsed_time) / (1024 ** 2)
-                        self.log(f"Downloaded: {self.format_size(downloaded_size)}, Speed: {speed_mb:.2f} MB/s")
+                        # Log every 1% progress change
+                        if progress >= last_logged_progress + 1:
+                            last_logged_progress = progress
+                            self.log_download_progress(downloaded_size, start_time)
                     QApplication.processEvents()
 
         if not self.stop_flag():
             current_download_progress_bar.setValue(100)
             current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - 100%")
             self.log(f"Archive downloaded: {bucket_name}.zip")
+
+    def log_download_progress(self, downloaded_size, start_time):
+        elapsed_time = time.time() - start_time
+        if elapsed_time > 0:
+            speed_mb = (downloaded_size / elapsed_time) / (1024 ** 2)
+            self.log(f"Downloaded: {self.format_size(downloaded_size)}, Speed: {speed_mb:.2f} MB/s")
 
     @staticmethod
     def format_size(bytes_size):
