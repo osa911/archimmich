@@ -19,5 +19,7 @@ wine pyinstaller \
   --collect-all "requests" \
   src/main.py;
 mkdir -p release;
-zip -r release/ArchImmich_Windows_v${VERSION}.zip dist/ArchImmich;
+cd dist/ArchImmich;
+zip -r ../../release/ArchImmich_Windows_v${VERSION}.zip ./*;
+cd ../..;
 echo "Windows build completed successfully!";
