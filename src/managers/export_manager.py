@@ -111,9 +111,16 @@ class ExportManager:
 
     @staticmethod
     def format_size(bytes_size):
-        gb_size = bytes_size / (1024 ** 3)
-        mb_size = bytes_size / (1024 ** 2)
-        return f"{gb_size:.2f} GB ({mb_size:.2f} MB)"
+        """Formats size in bytes to a human-readable format (GB and MB)."""
+        if bytes_size >= 1024 ** 3:  # Size in GB
+            gb_size = bytes_size / (1024 ** 3)
+            return f"{gb_size:.2f} GB ({gb_size * 1024:.2f} MB)"
+        elif bytes_size >= 1024 ** 2:  # Size in MB
+            mb_size = bytes_size / (1024 ** 2)
+            return f"0.00 GB ({mb_size:.2f} MB)"
+        else:  # Size in KB
+            kb_size = bytes_size / 1024
+            return f"0.00 GB (0.00 MB) ({kb_size:.2f} KB)"
 
     @staticmethod
     def format_time_bucket(time_bucket, format="MONTH"):

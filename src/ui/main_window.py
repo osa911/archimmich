@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
 
         # Login Button
         login_button = QPushButton("Login")
+        login_button.setObjectName("login_button")
         login_button.clicked.connect(self.login)
         self.login_layout.addWidget(login_button)
 

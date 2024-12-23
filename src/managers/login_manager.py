@@ -12,11 +12,10 @@ class LoginManager:
         if not (server_ip.startswith("http://") or server_ip.startswith("https://")):
             server_ip = f"http://{server_ip}"
 
-        # Ensure `/api` is appended to the host if not present
+        # Remove trailing slashes and ensure `/api` is appended exactly once
+        server_ip = server_ip.rstrip('/')
         if not server_ip.endswith("/api"):
-            server_ip = server_ip.rstrip('/') + '/api'
-        elif server_ip.endswith("/api/"):
-            server_ip = server_ip.rstrip('/')
+            server_ip = f"{server_ip}/api"
 
         if remember_me:
             save_settings(server_ip, api_key)

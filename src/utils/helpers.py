@@ -112,21 +112,21 @@ def render_default_avatar(app_window):
     app_window.avatar_label.setPixmap(pixmap)
     app_window.logs.append("Default avatar displayed.")
 
-CONFIG_FILE = "archimich_config.json"
+CONFIG_FILE = os.path.expanduser("~/archimich_config.json")
 
-def save_settings(server_ip, api_key):
-    settings = {
-        "server_ip": server_ip,
-        "api_key": api_key
-    }
-    with open(CONFIG_FILE, "w") as config_file:
-        json.dump(settings, config_file)
-    print("Settings saved successfully.")
+def save_settings(server_ip: str, api_key: str):
+    try:
+        with open(CONFIG_FILE, "w") as file:
+            json.dump({"server_ip": server_ip, "api_key": api_key}, file)
+        print(f"Settings saved successfully to {CONFIG_FILE}")
+    except Exception as e:
+        print(f"Failed to save settings: {e}")
+        raise
 
-
-def load_settings():
-    if os.path.exists(CONFIG_FILE):
-        with open(CONFIG_FILE, "r") as config_file:
+def load_settings(config_path=None):
+    path = config_path if config_path else CONFIG_FILE
+    if os.path.exists(path):
+        with open(path, "r") as config_file:
             try:
                 settings = json.load(config_file)
                 return settings.get("server_ip", ""), settings.get("api_key", "")
