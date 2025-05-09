@@ -1,5 +1,6 @@
 # **ArchImmich**
 
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/osa911/archimmich)](https://github.com/osa911/archimmich/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/osa911/archimmich)](https://github.com/osa911/archimmich/stargazers)
 **ArchImmich** is a modern export and archive tool designed for users of the Immich platform. This application simplifies the process of fetching media buckets and exporting them into archives, all while offering a sleek and user-friendly interface.
 
@@ -7,7 +8,23 @@
     <img src="https://github.com/user-attachments/assets/8df9d3eb-acf4-4812-89eb-68a3be9d1848" alt="ArchImmich UI">
 </div>
 
----
+## **Download**
+
+You can download the latest version of ArchImmich from the official GitHub releases page:
+
+1. Go to the [Releases page](https://github.com/osa911/archimmich/releases)
+2. Download the appropriate version for your operating system:
+   - **Linux**: `ArchImmich_Linux_vX.X.X.tar.gz`
+   - **MacOS**: `ArchImmich_MacOS_vX.X.X.dmg`
+   - **Windows**: `ArchImmich_Windows_vX.X.X.zip`
+
+## **Installation**
+
+1. Extract the downloaded archive
+2. Run the application:
+   - **Linux**: Unzip the archive and run `./ArchImmich`
+   - **MacOS**: Double-click on `ArchImmich_MacOS_vX.X.X.dmg` and move `ArchImmich.app` to your Applications folder
+   - **Windows**: Unzip the archive and double-click `ArchImmich.exe`
 
 ## **Features**
 
@@ -31,9 +48,7 @@
 - **User-Friendly Interface**:
   - Modern UI with intuitive options for configuration and archive management.
 
----
-
-## **Installation**
+## **Installation from Source**
 
 ### **1. Clone the Repository**
 
