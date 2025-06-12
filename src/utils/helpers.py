@@ -1,10 +1,58 @@
 import os
 import sys
 import json
+import logging
+from datetime import datetime
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QPixmap, QPainter, QBrush, QColor
 from PIL import Image, ImageOps
 from io import BytesIO
+
+class Logger:
+    def __init__(self, logs_widget=None):
+        self.logs_widget = logs_widget
+
+        # Get application directory and create logs folder inside it
+        app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        self.log_dir = os.path.join(app_dir, "logs")
+        os.makedirs(self.log_dir, exist_ok=True)
+
+        # Set up file logging
+        log_file = os.path.join(self.log_dir, f"archimmich_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log")
+        self.file_handler = logging.FileHandler(log_file, encoding='utf-8')
+        self.file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
+
+        # Set up logger
+        self.logger = logging.getLogger('archimmich')
+        self.logger.setLevel(logging.INFO)
+
+        # Remove existing handlers to avoid duplicates
+        for handler in self.logger.handlers[:]:
+            self.logger.removeHandler(handler)
+
+        self.logger.addHandler(self.file_handler)
+
+        # Keep track of the current log file
+        self.current_log_file = log_file
+
+    def append(self, message, level=logging.INFO):
+        """Log a message both to file and UI widget if available."""
+        # Log to file
+        self.logger.log(level, message)
+
+        # Log to UI if widget is available
+        if self.logs_widget:
+            self.logs_widget.append(message)
+
+    def get_log_file_path(self):
+        """Return the path to the current log file."""
+        return self.current_log_file
+
+    def __del__(self):
+        """Clean up logging handlers."""
+        if hasattr(self, 'file_handler'):
+            self.file_handler.close()
+            self.logger.removeHandler(self.file_handler)
 
 def get_resource_path(relative_path):
     """Get the absolute path to a resource, works for dev and PyInstaller builds."""

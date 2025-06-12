@@ -3,6 +3,7 @@ import time
 import hashlib
 from datetime import datetime
 from PyQt5.QtWidgets import QApplication
+from src.utils.helpers import Logger
 
 class ExportManager:
     def __init__(self, api_manager, logs_widget, output_dir, stop_flag_callback):
@@ -14,13 +15,13 @@ class ExportManager:
             stop_flag_callback (callable): A function that returns True if stop is requested.
         """
         self.api_manager = api_manager
-        self.logs = logs_widget
+        self.logger = Logger(logs_widget)
         self.output_dir = output_dir
         self.stop_flag = stop_flag_callback
 
     def log(self, message: str):
-        if self.logs:
-            self.logs.append(message)
+        if self.logger:
+            self.logger.append(message)
 
     def get_timeline_buckets(self, is_archived, size, with_partners, with_stacked):
         url = (

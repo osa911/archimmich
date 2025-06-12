@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator, QGuiApplication, QPixmap
 
 from src.ui.components.auto_scroll_text_edit import AutoScrollTextEdit
-from src.utils.helpers import display_avatar, get_resource_path, load_settings
+from src.utils.helpers import display_avatar, get_resource_path, load_settings, Logger
 from src.managers.login_manager import LoginManager
 from src.managers.export_manager import ExportManager
 
@@ -32,6 +32,12 @@ class MainWindow(QMainWindow):
 
         # UI Initialization
         self.setup_ui()
+
+        # Initialize logger after UI setup (since it needs the logs widget)
+        self.logger = Logger(self.logs)
+        self.log(f"ArchImmich v{VERSION} started")
+        self.log(f"Log file location: {self.logger.get_log_file_path()}")
+
         self.load_saved_settings()
 
         self.buckets = []
@@ -253,7 +259,12 @@ class MainWindow(QMainWindow):
         self.layout.addWidget(self.logout_button)
 
     def log(self, message):
-        self.logs.append(message)
+        """Log a message both to UI and file."""
+        if hasattr(self, 'logger'):
+            self.logger.append(message)
+        else:
+            # Fallback if logger isn't initialized yet
+            self.logs.append(message)
 
     def stop_export(self):
         self.log("Stop requested. Stopping export process...")
@@ -401,24 +412,53 @@ class MainWindow(QMainWindow):
         if not self.validate_bucket_inputs():
             return
 
-        self.log("Fetching buckets...")
-        inputs = self.get_user_input_values()
-        api_manager = self.login_manager.api_manager
-        self.export_manager = ExportManager(api_manager, self.logs, self.output_dir, self.stop_flag)
+        try:
+            self.log("Fetching buckets...")
+            inputs = self.get_user_input_values()
+            api_manager = self.login_manager.api_manager
+            self.export_manager = ExportManager(api_manager, self.logs, self.output_dir, self.stop_flag)
 
-        self.buckets = self.export_manager.get_timeline_buckets(
-            is_archived=inputs["isArchived"],
-            size=inputs["size"],
-            with_partners=inputs["withPartners"],
-            with_stacked=inputs["withStacked"]
-        )
-        self.log(f"Buckets fetched successfully: {len(self.buckets)} buckets found.")
-        self.populate_bucket_list(self.buckets)
-        self.bucket_scroll_area.show()
-        self.export_button.show()
-        self.divider1.show()
-        self.divider2.show()
-        self.bucket_list_label.show()
+            # Clear existing buckets before fetching new ones
+            self.buckets = []
+            QApplication.processEvents()  # Process any pending events
+
+            self.buckets = self.export_manager.get_timeline_buckets(
+                is_archived=inputs["isArchived"],
+                size=inputs["size"],
+                with_partners=inputs["withPartners"],
+                with_stacked=inputs["withStacked"]
+            )
+
+            if not self.buckets:
+                self.log("No buckets found.")
+                return
+
+            self.log(f"Buckets fetched successfully: {len(self.buckets)} buckets found.")
+
+            # Clear existing bucket list widgets before populating
+            for i in reversed(range(self.bucket_list_layout.count())):
+                widget = self.bucket_list_layout.itemAt(i).widget()
+                if widget and widget != self.select_all_checkbox:
+                    widget.deleteLater()
+            QApplication.processEvents()  # Process any pending events
+
+            self.populate_bucket_list(self.buckets)
+            self.bucket_scroll_area.show()
+            self.export_button.show()
+            self.divider1.show()
+            self.divider2.show()
+            self.bucket_list_label.show()
+
+        except Exception as e:
+            self.log(f"Error fetching buckets: {str(e)}")
+            # Reset UI state in case of error
+            self.buckets = []
+            self.bucket_scroll_area.hide()
+            self.export_button.hide()
+            self.divider1.hide()
+            self.divider2.hide()
+            self.bucket_list_label.hide()
+            QApplication.processEvents()  # Process any pending events
 
     def populate_bucket_list(self, buckets):
         for i in reversed(range(self.bucket_list_layout.count())):
