@@ -9,11 +9,21 @@ from PIL import Image, ImageOps
 from io import BytesIO
 
 class Logger:
-    def __init__(self, logs_widget=None):
+    def __init__(self, logs_widget=None, test_mode=False):
         self.logs_widget = logs_widget
 
+        # Skip file logging in test mode
+        self.test_mode = test_mode
+        if test_mode:
+            self.current_log_file = "test_log.log"
+            self.logger = logging.getLogger('archimmich_test')
+            self.logger.setLevel(logging.INFO)
+            # Use a null handler in test mode to avoid creating files
+            self.logger.addHandler(logging.NullHandler())
+            return
+
         # Get application directory and create logs folder inside it
-        app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        app_dir = get_app_directory()
         self.log_dir = os.path.join(app_dir, "logs")
         os.makedirs(self.log_dir, exist_ok=True)
 
@@ -37,8 +47,9 @@ class Logger:
 
     def append(self, message, level=logging.INFO):
         """Log a message both to file and UI widget if available."""
-        # Log to file
-        self.logger.log(level, message)
+        # Log to file if not in test mode
+        if not self.test_mode:
+            self.logger.log(level, message)
 
         # Log to UI if widget is available
         if self.logs_widget:
@@ -50,7 +61,7 @@ class Logger:
 
     def __del__(self):
         """Clean up logging handlers."""
-        if hasattr(self, 'file_handler'):
+        if hasattr(self, 'file_handler') and not self.test_mode:
             self.file_handler.close()
             self.logger.removeHandler(self.file_handler)
 
@@ -160,10 +171,19 @@ def render_default_avatar(app_window):
     app_window.avatar_label.setPixmap(pixmap)
     app_window.logs.append("Default avatar displayed.")
 
-CONFIG_FILE = os.path.expanduser("~/archimich_config.json")
+def get_app_directory():
+    """Get the application directory path."""
+    # Get application directory
+    app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    return app_dir
+
+CONFIG_FILE = os.path.join(get_app_directory(), "config.json")
 
 def save_settings(server_ip: str, api_key: str):
     try:
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+
         with open(CONFIG_FILE, "w") as file:
             json.dump({"server_ip": server_ip, "api_key": api_key}, file)
         print(f"Settings saved successfully to {CONFIG_FILE}")
@@ -171,14 +191,25 @@ def save_settings(server_ip: str, api_key: str):
         print(f"Failed to save settings: {e}")
         raise
 
-def load_settings(config_path=None):
-    path = config_path if config_path else CONFIG_FILE
-    if os.path.exists(path):
-        with open(path, "r") as config_file:
-            try:
-                settings = json.load(config_file)
-                return settings.get("server_ip", ""), settings.get("api_key", "")
-            except json.JSONDecodeError:
-                print("Error decoding configuration file. Resetting settings.")
-                return "", ""
+def load_settings(config_file=None):
+    """
+    Load server_ip and api_key from the config file.
+
+    Args:
+        config_file (str, optional): Path to the config file. If None, use the default CONFIG_FILE.
+
+    Returns:
+        tuple: (server_ip, api_key)
+    """
+    if config_file is None:
+        config_file = CONFIG_FILE
+
+    try:
+        if os.path.exists(config_file):
+            with open(config_file, "r") as file:
+                data = json.load(file)
+                return data.get("server_ip", ""), data.get("api_key", "")
+    except (json.JSONDecodeError, FileNotFoundError) as e:
+        print(f"Error loading settings: {e}")
+
     return "", ""

@@ -1,13 +1,13 @@
 import pytest
 import time
-from unittest.mock import Mock, MagicMock, call
+from unittest.mock import Mock, MagicMock, call, patch
 from src.managers.export_manager import ExportManager
 
 
 # Fixtures
 @pytest.fixture
 def mock_api_manager():
-    """Mock the APIManager."""
+    """Mock the API manager."""
     return Mock()
 
 
@@ -19,26 +19,37 @@ def mock_logs_widget():
 
 @pytest.fixture
 def mock_progress_bar():
-    """Mock the progress bar widget."""
+    """Mock progress bar widget."""
     return Mock()
 
 
 @pytest.fixture
-def export_manager(mock_api_manager, mock_logs_widget):
+def mock_logger():
+    """Mock the Logger class."""
+    with patch('src.utils.helpers.Logger') as mock:
+        # Configure the mock to use test_mode=True
+        instance = mock.return_value
+        instance.test_mode = True
+        yield instance
+
+
+@pytest.fixture
+def export_manager(mock_api_manager, mock_logs_widget, mock_logger):
     """Initialize ExportManager with mocks."""
-    return ExportManager(
-        api_manager=mock_api_manager,
-        logs_widget=mock_logs_widget,
-        output_dir="/tmp",
-        stop_flag_callback=lambda: False
-    )
+    with patch('src.managers.export_manager.Logger', return_value=mock_logger):
+        return ExportManager(
+            api_manager=mock_api_manager,
+            logs_widget=mock_logs_widget,
+            output_dir="/tmp",
+            stop_flag_callback=lambda: False
+        )
 
 
 # Test Cases
-def test_log(export_manager, mock_logs_widget):
+def test_log(export_manager, mock_logger):
     """Test the log method."""
     export_manager.log("Test message")
-    mock_logs_widget.append.assert_called_once_with("Test message")
+    mock_logger.append.assert_called_once_with("Test message")
 
 
 def test_get_timeline_buckets(export_manager, mock_api_manager):
@@ -92,33 +103,38 @@ def test_prepare_archive(export_manager, mock_api_manager):
     )
 
 
-def test_download_archive(export_manager, mock_api_manager, mock_logs_widget, mock_progress_bar):
+def test_download_archive(export_manager, mock_api_manager, mock_logger, mock_progress_bar):
     """Test downloading an archive."""
     mock_api_manager.post.return_value.iter_content = MagicMock(return_value=[b"chunk1", b"chunk2"])
 
-    export_manager.download_archive(
-        asset_ids=["1", "2"],
-        bucket_name="test_bucket",
-        total_size=2048,
-        current_download_progress_bar=mock_progress_bar
-    )
+    with patch('builtins.open', MagicMock()), \
+         patch('os.path.exists', return_value=False), \
+         patch('os.makedirs'):
 
-    mock_api_manager.post.assert_called_once_with(
-        "/download/archive",
-        json_data={"assetIds": ["1", "2"]},
-        stream=True
-    )
-    mock_logs_widget.append.assert_any_call("Downloading archive: test_bucket.zip")
-    mock_progress_bar.setValue.assert_any_call(100)
+        export_manager.download_archive(
+            asset_ids=["1", "2"],
+            bucket_name="test_bucket",
+            total_size=2048,
+            current_download_progress_bar=mock_progress_bar
+        )
+
+        mock_api_manager.post.assert_called_once_with(
+            "/download/archive",
+            json_data={"assetIds": ["1", "2"]},
+            stream=True
+        )
+        mock_logger.append.assert_any_call("Downloading archive: test_bucket.zip")
+        mock_progress_bar.setValue.assert_any_call(100)
 
 
-def test_log_download_progress(export_manager, mock_logs_widget):
+def test_log_download_progress(export_manager, mock_logger):
     """Test log_download_progress method."""
     # Simulate a non-zero elapsed time
     start_time = time.time() - 1  # 1 second elapsed
 
     export_manager.log_download_progress(1024 * 1024, start_time)
-    mock_logs_widget.append.assert_called_once_with("Downloaded: 0.00 GB (1.00 MB), Speed: 1.00 MB/s")
+    mock_logger.append.assert_called_once_with("Downloaded: 0.00 GB (1.00 MB), Speed: 1.00 MB/s")
+
 
 def test_format_size():
     """Test format_size method."""
@@ -127,6 +143,7 @@ def test_format_size():
     assert ExportManager.format_size(1024 * 1024 * 1024) == "1.00 GB (1024.00 MB)"
     assert ExportManager.format_size(512) == "0.00 GB (0.00 MB) (0.50 KB)"
     assert ExportManager.format_size(1) == "0.00 GB (0.00 MB) (0.00 KB)"
+
 
 def test_format_time_bucket():
     """Test format_time_bucket method."""
