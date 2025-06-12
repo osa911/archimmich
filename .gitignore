@@ -20,3 +20,6 @@ release/
 
 # Ignore rest of the files
 archimich_config.json
+
+# Ignore logs
+logs/
