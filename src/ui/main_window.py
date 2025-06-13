@@ -356,6 +356,18 @@ class MainWindow(QMainWindow):
         self.server_version_label.setText("")
         self.login_status.setStyleSheet("color: red;")
         self.reset_login_fields()
+
+        # Reset filter controls
+        self.is_archived_check.setChecked(False)
+        self.with_partners_check.setChecked(False)
+        self.with_stacked_check.setChecked(False)
+        self.is_favorite_check.setChecked(False)
+        self.is_trashed_check.setChecked(False)
+        self.visibility_combo.setCurrentIndex(0)
+        self.order_button.setText("↓")
+        self.size_combo.setCurrentText("MONTH")
+
+        # Hide UI sections
         self.config_section.hide()
         self.fetch_button.hide()
         self.export_button.hide()
