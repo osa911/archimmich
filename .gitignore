@@ -19,7 +19,7 @@ release/
 *.zip
 
 # Ignore rest of the files
-archimich_config.json
+config.json
 
 # Ignore logs
 logs/
