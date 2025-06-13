@@ -3,9 +3,10 @@ from requests.exceptions import RequestException
 from src.utils.helpers import save_settings
 
 class LoginManager:
-    def __init__(self):
+    def __init__(self, config=None):
         self.user = None
         self.api_manager = None
+        self.config = config or {}
 
     def set_credentials(self, server_ip: str, api_key: str, remember_me: bool):
         # Ensure the server_ip starts with 'http://' or 'https://'
@@ -19,7 +20,7 @@ class LoginManager:
 
         if remember_me:
             save_settings(server_ip, api_key)
-        self.api_manager = APIManager(server_ip, api_key)
+        self.api_manager = APIManager(server_ip, api_key, config=self.config)
 
     def getApiManager(self):
         return self.api_manager
@@ -27,9 +28,12 @@ class LoginManager:
     def login(self):
         if not self.api_manager:
             raise ValueError("API Manager not initialized with credentials.")
-        response = self.api_manager.get("/users/me")
-        self.user = response.json()
-        return self.user
+        try:
+            self.user = self.api_manager.get("/users/me", expected_type=dict)
+            return self.user
+        except Exception as e:
+            self.user = None
+            raise
 
     def logout(self):
         self.user = None
@@ -48,7 +52,11 @@ class LoginManager:
 
         def fetch_avatar():
             try:
-                return self.api_manager.get(f"/users/{self.user['id']}/profile-image")
+                # Note: For profile image, we want the raw response since it's binary data
+                return self.api_manager.get(
+                    f"/users/{self.user['id']}/profile-image",
+                    expected_type=None
+                )
             except RequestException as e:
                 self.logs.append(f"Failed to load avatar: {str(e)}")
                 raise e
