@@ -143,8 +143,17 @@ class MainWindow(QMainWindow):
         self.avatar_label.hide()
         self.login_status = QLabel("")
         self.login_status.setStyleSheet("color: green; font-size: 14px;")
+        self.server_version_label = QLabel("")
+        self.server_version_label.setStyleSheet("color: #666666; font-size: 12px;")
+
+        version_container = QWidget()
+        version_layout = QVBoxLayout(version_container)
+        version_layout.addWidget(self.login_status)
+        version_layout.addWidget(self.server_version_label)
+        version_layout.setContentsMargins(0, 0, 0, 0)
+
         self.avatar_text_layout.addWidget(self.avatar_label)
-        self.avatar_text_layout.addWidget(self.login_status)
+        self.avatar_text_layout.addWidget(version_container)
         self.avatar_text_layout.setContentsMargins(0, 0, 0, 0)
         self.avatar_text_layout.setAlignment(Qt.AlignLeft)
         self.layout.addWidget(self.avatar_text_container)
@@ -344,6 +353,7 @@ class MainWindow(QMainWindow):
         self.login_manager.logout()
         # Reset UI Elements
         self.login_status.setText("")
+        self.server_version_label.setText("")
         self.login_status.setStyleSheet("color: red;")
         self.reset_login_fields()
         self.config_section.hide()
@@ -441,6 +451,13 @@ class MainWindow(QMainWindow):
             self.login_status.setStyleSheet("color: green; font-size: 14px;")
             self.log("Login successful!")
             self.log(f"User: {user_name} | Email: {user_email}")
+
+            # Get server version info
+            server_info = self.login_manager.getApiManager().get_server_info()
+            if server_info:
+                version = server_info.get('version', 'unknown')
+                self.server_version_label.setText(f"Server version: {version}")
+                self.log(f"Connected to Immich server version {version}")
 
             fetch_avatar = self.login_manager.get_avatar_fetcher()
             if fetch_avatar:

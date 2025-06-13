@@ -21,6 +21,7 @@ class APIManager:
             'log_api_responses': False,
             'log_request_bodies': False
         })
+        self.server_info = None
 
     def set_logger(self, logger: Logger):
         self.logger = logger
@@ -144,3 +145,11 @@ class APIManager:
         """Make a POST request to the API."""
         response = self._make_request('POST', endpoint, json_data=json_data, stream=stream)
         return self._handle_response(response, expected_type)
+
+    def get_server_info(self) -> dict:
+        """Fetch server version information."""
+        if not self.server_info:
+            self.server_info = self.get('/server/about', dict)
+            if self.server_info:
+                self.log(f"Connected to Immich server version {self.server_info.get('version', 'unknown')}", force=True)
+        return self.server_info
