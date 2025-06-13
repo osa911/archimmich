@@ -110,7 +110,7 @@ To package the application into a standalone executable:
 2. **Build the Executable**:
 
    ```bash
-   sh scripts/build.sh
+   sh scripts/build-all-platforms.sh
    ```
 
 3. The executable will be available in the `dist` folder.
@@ -260,6 +260,36 @@ If you encounter any issues with the application, please include the relevant lo
    git push origin feature-name
    ```
 5. Open a pull request.
+
+## **Version Management**
+
+When releasing a new version:
+
+1. **Update Version**:
+
+   ```bash
+   # Update version across all files
+   sh scripts/update-version.sh X.X.X  # Replace X.X.X with version number
+   ```
+
+   This script updates version numbers in:
+
+   - `version.txt`
+   - `src/constants.py`
+   - `src/resources/Info.plist`
+   - `src/resources/version.rc`
+   - `src/resources/archimmich.desktop`
+
+2. **Build All Platforms**:
+
+   ```bash
+   sh scripts/build-all-platforms.sh
+   ```
+
+3. **Create Release**:
+   - Tag the version in git
+   - Create a GitHub release
+   - Upload the built artifacts
 
 ---
 
