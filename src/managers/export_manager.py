@@ -206,13 +206,6 @@ class ExportManager:
                                     self.log_download_progress(downloaded_size, start_time)
                             QApplication.processEvents()
 
-                # Verify downloaded file size
-                if os.path.exists(archive_path):
-                    final_size = os.path.getsize(archive_path)
-                    if abs(final_size - total_size) > 1024:  # 1KB tolerance
-                        self.log(f"Warning: Downloaded file size ({final_size}) doesn't match expected size ({total_size})")
-                        return
-
                 if not self.stop_flag():
                     current_download_progress_bar.setValue(100)
                     current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - 100%")
