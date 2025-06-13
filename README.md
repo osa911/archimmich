@@ -117,6 +117,50 @@ To package the application into a standalone executable:
 
 ---
 
+## **Running Tests**
+
+ArchImmich includes a comprehensive test suite to ensure code quality and functionality. To run the tests:
+
+1. **Setup your test environment**:
+
+   ```bash
+   # Make sure you're in the project root directory
+   # Activate your virtual environment if not already active
+   source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+   # Install test dependencies
+   pip install pytest pytest-mock pytest-qt
+   ```
+
+2. **Run all tests**:
+
+   ```bash
+   # From the project root directory
+   pytest
+   ```
+
+3. **Run specific test files**:
+
+   ```bash
+   pytest tests/test_helpers.py
+   ```
+
+4. **Run tests with verbose output**:
+
+   ```bash
+   pytest -v
+   ```
+
+5. **Run tests with coverage report**:
+   ```bash
+   pip install pytest-cov
+   pytest --cov=src
+   ```
+
+When contributing new features, please ensure that you add appropriate tests and that all existing tests pass.
+
+---
+
 ## **Usage**
 
 1. **Login**:
@@ -140,12 +184,62 @@ To package the application into a standalone executable:
 5. **Access Archives**:
    - Use the **Open Folder** button to access exported archives.
 
+## **Logs**
+
+ArchImmich automatically logs all operations to help with troubleshooting:
+
+- **Log Location**:
+
+  - Logs are stored in the `logs` directory within the application folder
+  - Each session creates a new log file
+
+  **Examples:**
+
+  - **Windows**: `C:\path\to\ArchImmich\logs\archimmich_20240612_123456.log`
+  - **macOS**: `/Applications/ArchImmich.app/Contents/Resources/logs/archimmich_20240612_123456.log`
+  - **Linux**: `/path/to/archimmich/logs/archimmich_20240612_123456.log`
+  - **From Source**: `./logs/archimmich_20240612_123456.log`
+
+- **Log Format**:
+
+  - Log files are named with timestamps: `archimmich_YYYYMMDD_HHMMSS.log`
+  - Each log entry includes timestamp, level, and message
+
+- **Log Contents**:
+  - Application startup/shutdown
+  - Login attempts
+  - API operations
+  - Download progress
+  - Errors and warnings
+
+## **Configuration**
+
+ArchImmich stores your configuration in a JSON file:
+
+- **Config Location**:
+
+  - The config file is stored as `config.json` in the application folder
+
+  **Examples:**
+
+  - **Windows**: `C:\path\to\ArchImmich\config.json`
+  - **macOS**: `/Applications/ArchImmich.app/Contents/Resources/config.json`
+  - **Linux**: `/path/to/archimmich/config.json`
+  - **From Source**: `./config.json`
+
+- **Config Contents**:
+  - Server URL
+  - API key
+  - User preferences
+
+If you encounter any issues with the application, please include the relevant log files when reporting problems.
+
 ---
 
 ## **Screenshots**
 
-| light theme  | dark theme  |
-|---|---|
+| light theme                                                                               | dark theme                                                                                |
+| ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
 | ![image](https://github.com/user-attachments/assets/aa5f42ae-a4fd-4ecb-b3c9-12e9b55886e7) | ![image](https://github.com/user-attachments/assets/fa0179fd-c3cd-4dc8-9b28-6259b2192c1a) |
 
 ---
