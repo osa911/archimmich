@@ -21,7 +21,7 @@ def test_set_credentials_with_valid_input(login_manager):
             login_manager.set_credentials("http://localhost", "test_api_key", remember_me=True)
 
             # Ensure APIManager was instantiated with correct parameters
-            MockAPIManager.assert_called_once_with("http://localhost/api", "test_api_key")
+            MockAPIManager.assert_called_once_with("http://localhost/api", "test_api_key", config={})
 
             # Ensure settings were saved
             mock_save_settings.assert_called_once_with("http://localhost/api", "test_api_key")
@@ -35,7 +35,7 @@ def test_set_credentials_without_protocol(login_manager):
         login_manager.set_credentials("localhost", "test_api_key", remember_me=False)
 
         # Ensure APIManager is called with the correct server IP
-        MockAPIManager.assert_called_once_with("http://localhost/api", "test_api_key")
+        MockAPIManager.assert_called_once_with("http://localhost/api", "test_api_key", config={})
 
 def test_set_credentials_with_extra_slash(login_manager):
     """Ensure trailing slashes are handled correctly."""
@@ -43,7 +43,7 @@ def test_set_credentials_with_extra_slash(login_manager):
         login_manager.set_credentials("http://localhost/api/", "test_api_key", remember_me=False)
 
         # Assert APIManager was initialized with the correct processed URL
-        MockAPIManager.assert_called_once_with("http://localhost/api", "test_api_key")
+        MockAPIManager.assert_called_once_with("http://localhost/api", "test_api_key", config={})
 
 # Test getApiManager
 def test_get_api_manager(login_manager):
@@ -57,8 +57,7 @@ def test_get_api_manager(login_manager):
 def test_login_success(login_manager):
     """Test successful login."""
     with patch.object(APIManager, 'get') as mock_get:
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"id": "123", "name": "Test User"}
+        mock_response = {"id": "123", "name": "Test User"}
         mock_get.return_value = mock_response
 
         login_manager.set_credentials("http://localhost", "test_api_key", remember_me=False)

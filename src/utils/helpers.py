@@ -229,7 +229,7 @@ def load_settings():
     try:
         with open(get_path_in_app(CONFIG_FILE), 'r') as f:
             settings = json.load(f)
-            return settings.get('server_ip'), settings.get('api_key')
+            return settings.get('server_ip', ''), settings.get('api_key', '')
     except Exception as e:
         print(f"Error loading settings: {e}")
-        return None, None
+        return '', ''

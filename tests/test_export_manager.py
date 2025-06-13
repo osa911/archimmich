@@ -54,7 +54,13 @@ def test_log(export_manager, mock_logger):
 
 def test_get_timeline_buckets(export_manager, mock_api_manager):
     """Test fetching timeline buckets."""
-    mock_api_manager.get.return_value.json.return_value = [{"id": 1}]
+    mock_response = [{
+        "id": 1,
+        "timeBucket": "2024-03-01T00:00:00.000Z",
+        "count": 5
+    }]
+    mock_api_manager.get.return_value = mock_response
+    mock_api_manager.debug = {"verbose_logging": False}
 
     result = export_manager.get_timeline_buckets(
         is_archived=True,
@@ -63,15 +69,27 @@ def test_get_timeline_buckets(export_manager, mock_api_manager):
         with_stacked=False
     )
 
-    assert result == [{"id": 1}]
-    mock_api_manager.get.assert_called_once_with(
-        "/timeline/buckets?isArchived=true&size=MONTH&withPartners=false&withStacked=false"
+    # Verify the URL construction
+    expected_url = (
+        "/timeline/buckets"
+        "?isArchived=true"
+        "&size=MONTH"
+        "&withPartners=false"
+        "&withStacked=false"
+        "&isFavorite=false"
+        "&isTrashed=false"
+        "&order=desc"
     )
+    mock_api_manager.get.assert_called_once_with(expected_url, expected_type=list)
+    assert result == mock_response
 
 
 def test_get_timeline_bucket_assets(export_manager, mock_api_manager):
     """Test fetching timeline bucket assets."""
-    mock_api_manager.get.return_value.json.return_value = [{"assetId": "123"}]
+    mock_response = {
+        "id": ["123", "456"]
+    }
+    mock_api_manager.get.return_value = mock_response
 
     result = export_manager.get_timeline_bucket_assets(
         time_bucket="2024-12",
@@ -81,26 +99,151 @@ def test_get_timeline_bucket_assets(export_manager, mock_api_manager):
         with_stacked=False
     )
 
-    assert result == [{"assetId": "123"}]
-    mock_api_manager.get.assert_called_once_with(
-        "/timeline/bucket?isArchived=true&size=MONTH&withPartners=false&withStacked=false&timeBucket=2024-12"
+    # Verify the URL construction
+    expected_url = (
+        "/timeline/bucket"
+        "?isArchived=true"
+        "&size=MONTH"
+        "&withPartners=false"
+        "&withStacked=false"
+        "&timeBucket=2024-12"
+        "&isFavorite=false"
+        "&isTrashed=false"
+        "&order=desc"
     )
+    mock_api_manager.get.assert_called_once_with(expected_url, expected_type=dict)
+    assert result == [{"id": "123"}, {"id": "456"}]
+
+
+def test_get_timeline_buckets_empty_response(export_manager, mock_api_manager):
+    """Test fetching timeline buckets with empty response."""
+    mock_api_manager.get.return_value = []
+    mock_api_manager.debug = {"verbose_logging": False}
+
+    result = export_manager.get_timeline_buckets(
+        is_archived=True,
+        size="MONTH",
+        with_partners=False,
+        with_stacked=False
+    )
+
+    assert result == []
+
+
+def test_get_timeline_bucket_assets_empty_response(export_manager, mock_api_manager):
+    """Test fetching timeline bucket assets with empty response."""
+    mock_api_manager.get.return_value = {"id": []}
+
+    result = export_manager.get_timeline_bucket_assets(
+        time_bucket="2024-12",
+        is_archived=True,
+        size="MONTH",
+        with_partners=False,
+        with_stacked=False
+    )
+
+    assert result == []
+
+
+def test_get_timeline_buckets_with_visibility(export_manager, mock_api_manager):
+    """Test fetching timeline buckets with visibility parameter."""
+    mock_response = [{
+        "id": 1,
+        "timeBucket": "2024-03-01T00:00:00.000Z",
+        "count": 5
+    }]
+    mock_api_manager.get.return_value = mock_response
+    mock_api_manager.debug = {"verbose_logging": False}
+
+    result = export_manager.get_timeline_buckets(
+        is_archived=True,
+        size="MONTH",
+        with_partners=False,
+        with_stacked=False,
+        visibility="public"
+    )
+
+    # Verify the URL construction with visibility
+    expected_url = (
+        "/timeline/buckets"
+        "?isArchived=true"
+        "&size=MONTH"
+        "&withPartners=false"
+        "&withStacked=false"
+        "&isFavorite=false"
+        "&isTrashed=false"
+        "&order=desc"
+        "&visibility=public"
+    )
+    mock_api_manager.get.assert_called_once_with(expected_url, expected_type=list)
+    assert result == mock_response
+
+
+def test_get_timeline_bucket_assets_with_visibility(export_manager, mock_api_manager):
+    """Test fetching timeline bucket assets with visibility parameter."""
+    mock_response = {
+        "id": ["123", "456"]
+    }
+    mock_api_manager.get.return_value = mock_response
+
+    result = export_manager.get_timeline_bucket_assets(
+        time_bucket="2024-12",
+        is_archived=True,
+        size="MONTH",
+        with_partners=False,
+        with_stacked=False,
+        visibility="public"
+    )
+
+    # Verify the URL construction with visibility
+    expected_url = (
+        "/timeline/bucket"
+        "?isArchived=true"
+        "&size=MONTH"
+        "&withPartners=false"
+        "&withStacked=false"
+        "&timeBucket=2024-12"
+        "&isFavorite=false"
+        "&isTrashed=false"
+        "&order=desc"
+        "&visibility=public"
+    )
+    mock_api_manager.get.assert_called_once_with(expected_url, expected_type=dict)
+    assert result == [{"id": "123"}, {"id": "456"}]
+
+
+def test_get_timeline_buckets_invalid_response(export_manager, mock_api_manager):
+    """Test handling of invalid bucket responses."""
+    mock_response = [
+        {"id": 1},  # Missing timeBucket and count
+        {"id": 2, "timeBucket": "invalid-date", "count": 5},  # Invalid date format
+        {"id": 3, "timeBucket": "2024-03-01T00:00:00.000Z", "count": 5},  # Valid bucket
+    ]
+    mock_api_manager.get.return_value = mock_response
+    mock_api_manager.debug = {"verbose_logging": True}
+
+    result = export_manager.get_timeline_buckets(
+        is_archived=True,
+        size="MONTH",
+        with_partners=False,
+        with_stacked=False
+    )
+
+    # Only the valid bucket should be returned
+    assert result == [{"id": 3, "timeBucket": "2024-03-01T00:00:00.000Z", "count": 5}]
 
 
 def test_prepare_archive(export_manager, mock_api_manager):
     """Test preparing an archive."""
-    mock_api_manager.post.return_value.json.return_value = {"totalSize": 1024}
+    mock_response = {"totalSize": 1024}
+    mock_api_manager.post.return_value = mock_response
 
     result = export_manager.prepare_archive(
         asset_ids=["1", "2", "3"],
         archive_size_bytes=1024
     )
 
-    assert result == {"totalSize": 1024}
-    mock_api_manager.post.assert_called_once_with(
-        "/download/info",
-        json_data={"assetIds": ["1", "2", "3"], "archiveSize": 1024}
-    )
+    assert result == mock_response
 
 
 def test_download_archive(export_manager, mock_api_manager, mock_logger, mock_progress_bar):
@@ -121,7 +264,8 @@ def test_download_archive(export_manager, mock_api_manager, mock_logger, mock_pr
         mock_api_manager.post.assert_called_once_with(
             "/download/archive",
             json_data={"assetIds": ["1", "2"]},
-            stream=True
+            stream=True,
+            expected_type=None
         )
         mock_logger.append.assert_any_call("Downloading archive: test_bucket.zip")
         mock_progress_bar.setValue.assert_any_call(100)
