@@ -6,29 +6,45 @@ from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QIntValidator, QGuiApplication, QPixmap
 
 from src.ui.components.auto_scroll_text_edit import AutoScrollTextEdit
+from src.ui.components.debug_settings_dialog import DebugSettingsDialog
 from src.utils.helpers import display_avatar, get_resource_path, load_settings, Logger
 from src.managers.login_manager import LoginManager
 from src.managers.export_manager import ExportManager
-
-VERSION = "0.0.2"
+from src.constants import VERSION, WINDOW_WIDTH, WINDOW_HEIGHT
 
 class MainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, config=None):
         super().__init__()
         self.stop_requested = False
-        self.login_manager = LoginManager()
+        self.config = config or {}
+        self.login_manager = LoginManager(config=self.config)
 
         self.setWindowTitle("ArchImmich")
         screen_geometry = QGuiApplication.primaryScreen().geometry()
-        window_width = 850
-        window_height = 850
-        x = (screen_geometry.width() - window_width) // 2
-        y = (screen_geometry.height() - window_height) // 2
-        self.setGeometry(x, y, window_width, window_height)
+        x = (screen_geometry.width() - WINDOW_WIDTH) // 2
+        y = (screen_geometry.height() - WINDOW_HEIGHT) // 2
+        self.setGeometry(x, y, WINDOW_WIDTH, WINDOW_HEIGHT)
 
+        # Set maximum height to 100% of screen height
+        max_height = int(screen_geometry.height() * 1)
+        self.setMaximumHeight(max_height)
+
+        # Create a scroll area for the main content
+        main_scroll_area = QScrollArea()
+        main_scroll_area.setWidgetResizable(True)
+        main_scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        main_scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.setCentralWidget(main_scroll_area)
+
+        # Create the content widget that will be scrollable
         self.central_widget = QWidget()
-        self.setCentralWidget(self.central_widget)
+        main_scroll_area.setWidget(self.central_widget)
+
         self.layout = QVBoxLayout(self.central_widget)
+        self.layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the content
+
+        # Create menu bar
+        self.setup_menu_bar()
 
         # UI Initialization
         self.setup_ui()
@@ -42,6 +58,20 @@ class MainWindow(QMainWindow):
 
         self.buckets = []
         self.output_dir = ""
+
+    def setup_menu_bar(self):
+        """Setup the main window menu bar."""
+        menubar = self.menuBar()
+        settings_menu = menubar.addMenu('Settings')
+
+        # Debug Settings action
+        debug_settings_action = settings_menu.addAction('Debug Settings')
+        debug_settings_action.triggered.connect(self.show_debug_settings)
+
+    def show_debug_settings(self):
+        """Show the debug settings dialog."""
+        dialog = DebugSettingsDialog(self.config, self)
+        dialog.exec_()
 
     def load_saved_settings(self):
         # Load saved settings on startup
@@ -132,6 +162,36 @@ class MainWindow(QMainWindow):
         self.config_layout.addWidget(self.with_partners_check)
         self.with_stacked_check = QCheckBox("With Stacked?")
         self.config_layout.addWidget(self.with_stacked_check)
+        self.is_favorite_check = QCheckBox("Is Favorite?")
+        self.is_favorite_check.setChecked(False)
+        self.config_layout.addWidget(self.is_favorite_check)
+        self.is_trashed_check = QCheckBox("Is Trashed?")
+        self.is_trashed_check.setChecked(False)
+        self.config_layout.addWidget(self.is_trashed_check)
+
+        # Add visibility selector
+        self.visibility_label = QLabel("Visibility:")
+        self.visibility_combo = QComboBox()
+        self.visibility_combo.addItem("Not specified", "")  # Empty value for no filter
+        self.visibility_combo.addItem("Archive", "archive")
+        self.visibility_combo.addItem("Timeline", "timeline")
+        self.visibility_combo.addItem("Hidden", "hidden")
+        self.visibility_combo.addItem("Locked", "locked")
+        self.config_layout.addWidget(self.visibility_label)
+        self.config_layout.addWidget(self.visibility_combo)
+
+        # Order section
+        order_layout = QHBoxLayout()
+
+        # Add order toggle button
+        self.order_label = QLabel("Order by:")
+        self.order_button = QPushButton("↓")  # Start with descending (newest first)
+        # self.order_button.setFixedWidth(30)
+        self.order_button.setToolTip("Toggle sort order (↓ descending/newest first, ↑ ascending/oldest first)")
+        self.order_button.clicked.connect(self.toggle_order)
+        order_layout.addWidget(self.order_label)
+        order_layout.addWidget(self.order_button)
+        self.config_layout.addLayout(order_layout)
 
         self.archive_size_label = QLabel("Archive Size (GB):")
         self.archive_size_field = QLineEdit()
@@ -402,13 +462,18 @@ class MainWindow(QMainWindow):
 
     def get_user_input_values(self):
         return {
-            "isArchived": self.is_archived_check.isChecked(),
+            "is_archived": self.is_archived_check.isChecked(),
+            "with_partners": self.with_partners_check.isChecked(),
+            "with_stacked": self.with_stacked_check.isChecked(),
+            "is_favorite": self.is_favorite_check.isChecked(),
+            "is_trashed": self.is_trashed_check.isChecked(),
+            "visibility": self.visibility_combo.currentData(),
             "size": self.size_combo.currentText(),
-            "withPartners": self.with_partners_check.isChecked(),
-            "withStacked": self.with_stacked_check.isChecked(),
+            "order": "asc" if self.order_button.text() == "↑" else "desc"
         }
 
     def fetch_buckets(self):
+        """Fetch buckets from the API."""
         if not self.validate_bucket_inputs():
             return
 
@@ -423,10 +488,14 @@ class MainWindow(QMainWindow):
             QApplication.processEvents()  # Process any pending events
 
             self.buckets = self.export_manager.get_timeline_buckets(
-                is_archived=inputs["isArchived"],
+                is_archived=inputs["is_archived"],
                 size=inputs["size"],
-                with_partners=inputs["withPartners"],
-                with_stacked=inputs["withStacked"]
+                with_partners=inputs["with_partners"],
+                with_stacked=inputs["with_stacked"],
+                visibility=inputs["visibility"],
+                is_favorite=inputs["is_favorite"],
+                is_trashed=inputs["is_trashed"],
+                order=inputs["order"]
             )
 
             if not self.buckets:
@@ -450,7 +519,9 @@ class MainWindow(QMainWindow):
             self.bucket_list_label.show()
 
         except Exception as e:
-            self.log(f"Error fetching buckets: {str(e)}")
+            error_msg = str(e).lower()
+            if not ("api error" in error_msg):
+                self.log(f"Error fetching buckets: {str(e)}")
             # Reset UI state in case of error
             self.buckets = []
             self.bucket_scroll_area.hide()
@@ -513,50 +584,69 @@ class MainWindow(QMainWindow):
             bucket_name = self.export_manager.format_time_bucket(time_bucket, inputs["size"])
             self.log(f"Processing bucket {i}/{len(selected_buckets)}: {bucket_name}")
 
-            asset_ids = self.fetch_assets_for_bucket(time_bucket, inputs)
-            if not asset_ids:
-                self.log(f"No assets found for bucket: {bucket_name}")
-                self.update_progress_bar(i, len(selected_buckets))
-                continue
+            try:
+                asset_ids = self.fetch_assets_for_bucket(time_bucket, inputs)
+                if not asset_ids:
+                    self.log(f"No assets found for bucket: {bucket_name}")
+                    self.update_progress_bar(i, len(selected_buckets))
+                    continue
 
-            self.download_and_save_archive(asset_ids, bucket_name, archive_size_bytes)
+                self.download_and_save_archive(asset_ids, bucket_name, archive_size_bytes)
+            except Exception as e:
+                self.log(f"Error processing bucket {bucket_name}: {str(e)}")
+
             self.update_progress_bar(i, len(selected_buckets))
 
     def process_all_buckets_combined(self, selected_buckets, inputs, archive_size_bytes):
         all_asset_ids = []
-        for time_bucket in selected_buckets:
-            asset_ids = self.fetch_assets_for_bucket(time_bucket, inputs)
-            all_asset_ids.extend(asset_ids)
+        try:
+            for time_bucket in selected_buckets:
+                asset_ids = self.fetch_assets_for_bucket(time_bucket, inputs)
+                all_asset_ids.extend(asset_ids)
 
-        if not all_asset_ids:
-            self.log("No assets found in selected buckets.")
-            return
+            if not all_asset_ids:
+                self.log("No assets found in selected buckets.")
+                return
 
-        self.download_and_save_archive(all_asset_ids, "Combined_Archive", archive_size_bytes)
+            self.download_and_save_archive(all_asset_ids, "Combined_Archive", archive_size_bytes)
+        except Exception as e:
+            self.log(f"Error processing combined archive: {str(e)}")
 
     def fetch_assets_for_bucket(self, time_bucket, inputs):
+        """Fetch assets for a specific bucket."""
         assets = self.export_manager.get_timeline_bucket_assets(
             time_bucket,
-            is_archived=inputs["isArchived"],
+            is_archived=inputs["is_archived"],
             size=inputs["size"],
-            with_partners=inputs["withPartners"],
-            with_stacked=inputs["withStacked"]
+            with_partners=inputs["with_partners"],
+            with_stacked=inputs["with_stacked"],
+            visibility=inputs["visibility"],
+            is_favorite=inputs["is_favorite"],
+            is_trashed=inputs["is_trashed"],
+            order=inputs["order"]
         )
         if self.stop_flag():
             self.log("Export stopped by user during image fetch.")
             return []
-        return [a['id'] for a in assets]
+        return [asset["id"] for asset in assets]
 
     def download_and_save_archive(self, asset_ids, archive_name, archive_size_bytes):
-        archive_info = self.export_manager.prepare_archive(asset_ids, archive_size_bytes)
-        total_size = archive_info["totalSize"]
-        self.log(f"Preparing archive: Total size = {self.export_manager.format_size(total_size)}")
+        try:
+            archive_info = self.export_manager.prepare_archive(asset_ids, archive_size_bytes)
+            total_size = archive_info["totalSize"]
+            if total_size == 0:
+                self.log(f"Failed to prepare archive for {archive_name}")
 
-        self.export_manager.download_archive(
-            asset_ids, archive_name, total_size, self.current_download_progress_bar
-        )
-        self.archives_display.show()
-        self.archives_display.append(f"{archive_name}.zip")
+            self.log(f"Preparing archive: Total size = {self.export_manager.format_size(total_size)}")
+
+            self.export_manager.download_archive(
+                asset_ids, archive_name, total_size, self.current_download_progress_bar
+            )
+
+            self.archives_display.show()
+            self.archives_display.append(f"{archive_name}.zip")
+        except Exception as e:
+            self.log(f"Error preparing archive for {archive_name}: {str(e)}")
 
     def update_progress_bar(self, current, total):
         self.progress_bar.setValue(current)
@@ -596,3 +686,22 @@ class MainWindow(QMainWindow):
             self.process_all_buckets_combined(selected_buckets, inputs, archive_size_bytes)
 
         self.finalize_export()
+
+    def toggle_order(self):
+        """Toggle sort order between ascending and descending"""
+        if self.order_button.text() == "↓":
+            self.order_button.setText("↑")
+            self.order_button.setToolTip("Currently: ascending/oldest first (click to change)")
+        else:
+            self.order_button.setText("↓")
+            self.order_button.setToolTip("Currently: descending/newest first (click to change)")
+
+        # Refresh buckets if they are already fetched
+        if hasattr(self, 'buckets') and self.buckets:
+            self.fetch_buckets()
+
+    def clear_bucket_list(self):
+        for i in reversed(range(self.bucket_list_layout.count())):
+            widget = self.bucket_list_layout.itemAt(i).widget()
+            if widget and widget != self.select_all_checkbox:
+                widget.deleteLater()

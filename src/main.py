@@ -1,5 +1,6 @@
 import sys
 import os
+import json
 
 # Add the project root to sys.path
 project_root = os.path.abspath(os.path.dirname(__file__) + "/..")
@@ -7,12 +8,25 @@ sys.path.append(project_root)
 
 from ui.main_window import MainWindow
 from PyQt5.QtWidgets import QApplication
+from src.utils.helpers import get_path_in_app
+from src.constants import CONFIG_FILE
+
+
+def load_config():
+    """Load configuration from config.json."""
+    try:
+        with open(get_path_in_app(CONFIG_FILE), 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading config: {e}")
+        return {}
 
 
 def create_app():
     """Create and return the QApplication and MainWindow instances."""
     app = QApplication(sys.argv)
-    window = MainWindow()
+    config = load_config()
+    window = MainWindow(config)
     return app, window
 
 
