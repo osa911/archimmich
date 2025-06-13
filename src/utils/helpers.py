@@ -2,15 +2,21 @@ import os
 import sys
 import json
 import logging
+import queue
+import threading
 from datetime import datetime
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtGui import QPixmap, QPainter, QBrush, QColor
 from PIL import Image, ImageOps
 from io import BytesIO
+from src.constants import CONFIG_FILE
 
 class Logger:
     def __init__(self, logs_widget=None, test_mode=False):
         self.logs_widget = logs_widget
+        self.log_queue = queue.Queue()
+        self.write_thread = None
+        self.should_stop = False
 
         # Skip file logging in test mode
         self.test_mode = test_mode
@@ -22,9 +28,8 @@ class Logger:
             self.logger.addHandler(logging.NullHandler())
             return
 
-        # Get application directory and create logs folder inside it
-        app_dir = get_app_directory()
-        self.log_dir = os.path.join(app_dir, "logs")
+        # Create logs folder inside app directory
+        self.log_dir = get_path_in_app("logs")
         os.makedirs(self.log_dir, exist_ok=True)
 
         # Set up file logging
@@ -45,28 +50,54 @@ class Logger:
         # Keep track of the current log file
         self.current_log_file = log_file
 
+        # Start background thread for file logging
+        self.start_logging_thread()
+
+    def start_logging_thread(self):
+        """Start the background thread for file logging."""
+        if self.test_mode:
+            return
+
+        def log_worker():
+            while not self.should_stop:
+                try:
+                    # Get message from queue with timeout
+                    message, level = self.log_queue.get(timeout=0.1)
+                    self.logger.log(level, message)
+                    self.log_queue.task_done()
+                except queue.Empty:
+                    continue
+                except Exception as e:
+                    print(f"Error in log worker: {e}")
+
+        self.write_thread = threading.Thread(target=log_worker, daemon=True)
+        self.write_thread.start()
+
     def append(self, message, level=logging.INFO):
         """Log a message both to file and UI widget if available."""
-        # Log to file if not in test mode
-        if not self.test_mode:
-            self.logger.log(level, message)
-
-        # Log to UI if widget is available
+        # Update UI immediately
         if self.logs_widget:
             self.logs_widget.append(message)
+
+        # Queue message for file logging if not in test mode
+        if not self.test_mode:
+            self.log_queue.put((message, level))
 
     def get_log_file_path(self):
         """Return the path to the current log file."""
         return self.current_log_file
 
     def __del__(self):
-        """Clean up logging handlers."""
+        """Clean up logging handlers and stop background thread."""
+        self.should_stop = True
+        if hasattr(self, 'write_thread') and self.write_thread:
+            self.write_thread.join(timeout=1.0)
         if hasattr(self, 'file_handler') and not self.test_mode:
             self.file_handler.close()
             self.logger.removeHandler(self.file_handler)
 
 def get_resource_path(relative_path):
-    """Get the absolute path to a resource, works for dev and PyInstaller builds."""
+    """Get the absolute path to a file, works for dev and PyInstaller builds."""
     if hasattr(sys, "_MEIPASS"):
         # PyInstaller temporary folder for bundled files
         return os.path.join(sys._MEIPASS, relative_path)
@@ -177,39 +208,28 @@ def get_app_directory():
     app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     return app_dir
 
-CONFIG_FILE = os.path.join(get_app_directory(), "config.json")
+def get_path_in_app(relative_path):
+    """Get absolute path to a file in the app directory, for user data files like config and logs."""
+    return os.path.join(get_app_directory(), relative_path)
 
-def save_settings(server_ip: str, api_key: str):
+def save_settings(server_ip, api_key):
+    """Save login settings to file."""
+    settings = {
+        'server_ip': server_ip,
+        'api_key': api_key
+    }
     try:
-        # Ensure the directory exists
-        os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
-
-        with open(CONFIG_FILE, "w") as file:
-            json.dump({"server_ip": server_ip, "api_key": api_key}, file)
-        print(f"Settings saved successfully to {CONFIG_FILE}")
+        with open(get_path_in_app(CONFIG_FILE), 'w') as f:
+            json.dump(settings, f)
     except Exception as e:
-        print(f"Failed to save settings: {e}")
-        raise
+        print(f"Error saving settings: {e}")
 
-def load_settings(config_file=None):
-    """
-    Load server_ip and api_key from the config file.
-
-    Args:
-        config_file (str, optional): Path to the config file. If None, use the default CONFIG_FILE.
-
-    Returns:
-        tuple: (server_ip, api_key)
-    """
-    if config_file is None:
-        config_file = CONFIG_FILE
-
+def load_settings():
+    """Load login settings from file."""
     try:
-        if os.path.exists(config_file):
-            with open(config_file, "r") as file:
-                data = json.load(file)
-                return data.get("server_ip", ""), data.get("api_key", "")
-    except (json.JSONDecodeError, FileNotFoundError) as e:
+        with open(get_path_in_app(CONFIG_FILE), 'r') as f:
+            settings = json.load(f)
+            return settings.get('server_ip'), settings.get('api_key')
+    except Exception as e:
         print(f"Error loading settings: {e}")
-
-    return "", ""
+        return None, None
