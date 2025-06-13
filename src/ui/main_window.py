@@ -25,6 +25,10 @@ class MainWindow(QMainWindow):
         y = (screen_geometry.height() - WINDOW_HEIGHT) // 2
         self.setGeometry(x, y, WINDOW_WIDTH, WINDOW_HEIGHT)
 
+        # Set minimum width and height
+        self.setMinimumWidth(300)
+        self.setMinimumHeight(400)
+
         # Set maximum height to 100% of screen height
         max_height = int(screen_geometry.height() * 1)
         self.setMaximumHeight(max_height)
@@ -41,7 +45,6 @@ class MainWindow(QMainWindow):
         main_scroll_area.setWidget(self.central_widget)
 
         self.layout = QVBoxLayout(self.central_widget)
-        self.layout.setContentsMargins(10, 10, 10, 10)  # Add margins around the content
 
         # Create menu bar
         self.setup_menu_bar()

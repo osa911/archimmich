@@ -6,7 +6,7 @@ import json
 project_root = os.path.abspath(os.path.dirname(__file__) + "/..")
 sys.path.append(project_root)
 
-from ui.main_window import MainWindow
+from src.ui.main_window import MainWindow
 from PyQt5.QtWidgets import QApplication
 from src.utils.helpers import get_path_in_app
 from src.constants import CONFIG_FILE
