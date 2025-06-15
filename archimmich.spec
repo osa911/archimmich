@@ -2,18 +2,20 @@
 from PyInstaller.utils.hooks import collect_dynamic_libs
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('src/resources/*', 'src/resources')]
+# Initialize data and binary collections
+datas = [('src/resources/*', 'src/resources'), ('version.txt', '.')]
 binaries = []
 hiddenimports = []
+
+# Collect dependencies
 binaries += collect_dynamic_libs('_internal')
 tmp_ret = collect_all('PyQt5')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 tmp_ret = collect_all('requests')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 
-
 a = Analysis(
-    ['src\\main.py'],
+    ['src/main.py'],
     pathex=['src'],
     binaries=binaries,
     datas=datas,
@@ -30,12 +32,12 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    [('O', None, 'OPTION'), ('O', None, 'OPTION')],
+    [('O', None, 'OPTION')],
     exclude_binaries=True,
     name='ArchImmich',
     debug=False,
     bootloader_ignore_signals=False,
-    strip=False,
+    strip=True,
     upx=True,
     console=False,
     disable_windowed_traceback=False,
@@ -43,14 +45,20 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=['src\\resources\\favicon-180.png'],
+    icon=['src/resources/favicon-180.png'],
 )
 coll = COLLECT(
     exe,
     a.binaries,
     a.datas,
-    strip=False,
+    strip=True,
     upx=True,
     upx_exclude=[],
     name='ArchImmich',
+)
+app = BUNDLE(
+    coll,
+    name='ArchImmich.app',
+    icon='src/resources/favicon-180.png',
+    bundle_identifier='com.osa911.archimmich',
 )

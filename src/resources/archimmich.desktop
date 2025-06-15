@@ -1,0 +1,10 @@
+[Desktop Entry]
+Version=0.0.3
+Type=Application
+Name=ArchImmich
+Comment=Immich Archive Tool
+Exec=ArchImmich
+Icon=archimmich
+Terminal=false
+Categories=Utility;Archiving;
+Keywords=immich;archive;backup;

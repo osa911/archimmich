@@ -109,11 +109,21 @@ To package the application into a standalone executable:
 
 2. **Build the Executable**:
 
+   **Note_Windows**: If you want to build for Windows from Linux/MacOS, you will need to install **Wine** to build the executable.
+
+   **Note_MacOS**: If you want to build for MacOS with DMG, you will need to install **create-dmg** to build the package.
+
+   **Note_Linux**: If you want to build for Linux, you will need to install **Docker** to build the package.
+
    ```bash
    sh scripts/build-all-platforms.sh
    ```
 
-3. The executable will be available in the `dist` folder.
+3. The built application will be available in:
+   - `dist/ArchImmich.app` - The executable application
+   - `release/ArchImmich_MacOS_v{version}.dmg` - The macOS disk image
+   - `release/ArchImmich_Linux_v{version}.tar.gz` - The Linux package
+   - `release/ArchImmich_Windows_v{version}.zip` - The Windows package
 
 ---
 
