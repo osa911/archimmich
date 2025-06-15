@@ -55,6 +55,21 @@ class DebugSettingsDialog(QDialog):
                 json.dump(self.config, f, indent=2)
             if hasattr(self.parent(), 'log'):
                 self.parent().log("Debug settings saved successfully")
+
+            # Update API manager config if available
+            if hasattr(self.parent(), 'login_manager') and self.parent().login_manager.api_manager:
+                self.parent().login_manager.api_manager.update_config(self.config)
+                if hasattr(self.parent(), 'log'):
+                    self.parent().log("Debug settings applied to current session")
+
+            # Also update login manager config for future sessions
+            if hasattr(self.parent(), 'login_manager'):
+                self.parent().login_manager.update_config(self.config)
+
+            # Update the parent's config reference so it persists
+            if hasattr(self.parent(), 'config'):
+                self.parent().config = self.config
+
         except Exception as e:
             if hasattr(self.parent(), 'log'):
                 self.parent().log(f"Error saving debug settings: {str(e)}")
