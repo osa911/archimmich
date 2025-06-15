@@ -91,3 +91,50 @@ def test_get_server_info_failure(requests_mock, api_manager):
 
     with pytest.raises(APIError):
         api_manager.get_server_info()
+
+
+def test_api_manager_update_config():
+    """Test that update_config properly updates debug settings."""
+    # Initial config with debug settings off
+    initial_config = {
+        'debug': {
+            'verbose_logging': False,
+            'log_api_requests': False,
+            'log_api_responses': False,
+            'log_request_bodies': False
+        }
+    }
+
+    api_manager = APIManager("http://test.com/api", "test-key", config=initial_config)
+
+    # Verify initial settings
+    assert api_manager.debug['verbose_logging'] == False
+    assert api_manager.debug['log_api_requests'] == False
+    assert api_manager.debug['log_api_responses'] == False
+    assert api_manager.debug['log_request_bodies'] == False
+
+    # Updated config with debug settings on
+    updated_config = {
+        'debug': {
+            'verbose_logging': True,
+            'log_api_requests': True,
+            'log_api_responses': True,
+            'log_request_bodies': True
+        }
+    }
+
+    # Update the config
+    api_manager.update_config(updated_config)
+
+    # Verify settings are updated
+    assert api_manager.debug['verbose_logging'] == True
+    assert api_manager.debug['log_api_requests'] == True
+    assert api_manager.debug['log_api_responses'] == True
+    assert api_manager.debug['log_request_bodies'] == True
+
+    # Test with None config (should use defaults)
+    api_manager.update_config(None)
+    assert api_manager.debug['verbose_logging'] == False
+    assert api_manager.debug['log_api_requests'] == False
+    assert api_manager.debug['log_api_responses'] == False
+    assert api_manager.debug['log_request_bodies'] == False

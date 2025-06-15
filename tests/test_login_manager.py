@@ -115,3 +115,43 @@ def test_get_avatar_fetcher(login_manager):
         fetch_avatar = login_manager.get_avatar_fetcher()
         response = fetch_avatar()
         assert response.content == b"fake_image_data"
+
+
+def test_login_manager_update_config():
+    """Test that update_config properly updates both login manager and API manager configs."""
+    initial_config = {
+        'debug': {
+            'verbose_logging': False,
+            'log_api_requests': False
+        }
+    }
+
+    login_manager = LoginManager(config=initial_config)
+
+    # Set up credentials to create an API manager
+    with patch('src.managers.login_manager.save_settings'):
+        login_manager.set_credentials("http://test.com", "test-key", False)
+
+    # Verify initial config
+    assert login_manager.config['debug']['verbose_logging'] == False
+    assert login_manager.api_manager.debug['verbose_logging'] == False
+
+    # Update config
+    updated_config = {
+        'debug': {
+            'verbose_logging': True,
+            'log_api_requests': True
+        }
+    }
+
+    login_manager.update_config(updated_config)
+
+    # Verify both login manager and API manager configs are updated
+    assert login_manager.config['debug']['verbose_logging'] == True
+    assert login_manager.api_manager.debug['verbose_logging'] == True
+    assert login_manager.api_manager.debug['log_api_requests'] == True
+
+    # Test update_config with None (should use empty dict)
+    login_manager.update_config(None)
+    assert login_manager.config == {}
+    assert login_manager.api_manager.debug['verbose_logging'] == False

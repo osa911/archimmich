@@ -36,13 +36,12 @@ def mock_logger():
 @pytest.fixture
 def export_manager(mock_api_manager, mock_logs_widget, mock_logger):
     """Initialize ExportManager with mocks."""
-    with patch('src.managers.export_manager.Logger', return_value=mock_logger):
-        return ExportManager(
-            api_manager=mock_api_manager,
-            logs_widget=mock_logs_widget,
-            output_dir="/tmp",
-            stop_flag_callback=lambda: False
-        )
+    return ExportManager(
+        api_manager=mock_api_manager,
+        logger=mock_logger,
+        output_dir="/tmp",
+        stop_flag_callback=lambda: False
+    )
 
 
 # Test Cases
@@ -64,7 +63,6 @@ def test_get_timeline_buckets(export_manager, mock_api_manager):
 
     result = export_manager.get_timeline_buckets(
         is_archived=True,
-        size="MONTH",
         with_partners=False,
         with_stacked=False
     )
@@ -73,7 +71,6 @@ def test_get_timeline_buckets(export_manager, mock_api_manager):
     expected_url = (
         "/timeline/buckets"
         "?isArchived=true"
-        "&size=MONTH"
         "&withPartners=false"
         "&withStacked=false"
         "&isFavorite=false"
@@ -94,7 +91,6 @@ def test_get_timeline_bucket_assets(export_manager, mock_api_manager):
     result = export_manager.get_timeline_bucket_assets(
         time_bucket="2024-12",
         is_archived=True,
-        size="MONTH",
         with_partners=False,
         with_stacked=False
     )
@@ -103,7 +99,6 @@ def test_get_timeline_bucket_assets(export_manager, mock_api_manager):
     expected_url = (
         "/timeline/bucket"
         "?isArchived=true"
-        "&size=MONTH"
         "&withPartners=false"
         "&withStacked=false"
         "&timeBucket=2024-12"
@@ -122,7 +117,6 @@ def test_get_timeline_buckets_empty_response(export_manager, mock_api_manager):
 
     result = export_manager.get_timeline_buckets(
         is_archived=True,
-        size="MONTH",
         with_partners=False,
         with_stacked=False
     )
@@ -137,7 +131,6 @@ def test_get_timeline_bucket_assets_empty_response(export_manager, mock_api_mana
     result = export_manager.get_timeline_bucket_assets(
         time_bucket="2024-12",
         is_archived=True,
-        size="MONTH",
         with_partners=False,
         with_stacked=False
     )
@@ -157,7 +150,6 @@ def test_get_timeline_buckets_with_visibility(export_manager, mock_api_manager):
 
     result = export_manager.get_timeline_buckets(
         is_archived=True,
-        size="MONTH",
         with_partners=False,
         with_stacked=False,
         visibility="public"
@@ -167,7 +159,6 @@ def test_get_timeline_buckets_with_visibility(export_manager, mock_api_manager):
     expected_url = (
         "/timeline/buckets"
         "?isArchived=true"
-        "&size=MONTH"
         "&withPartners=false"
         "&withStacked=false"
         "&isFavorite=false"
@@ -189,7 +180,6 @@ def test_get_timeline_bucket_assets_with_visibility(export_manager, mock_api_man
     result = export_manager.get_timeline_bucket_assets(
         time_bucket="2024-12",
         is_archived=True,
-        size="MONTH",
         with_partners=False,
         with_stacked=False,
         visibility="public"
@@ -199,7 +189,6 @@ def test_get_timeline_bucket_assets_with_visibility(export_manager, mock_api_man
     expected_url = (
         "/timeline/bucket"
         "?isArchived=true"
-        "&size=MONTH"
         "&withPartners=false"
         "&withStacked=false"
         "&timeBucket=2024-12"
@@ -224,7 +213,6 @@ def test_get_timeline_buckets_invalid_response(export_manager, mock_api_manager)
 
     result = export_manager.get_timeline_buckets(
         is_archived=True,
-        size="MONTH",
         with_partners=False,
         with_stacked=False
     )
@@ -265,9 +253,10 @@ def test_download_archive(export_manager, mock_api_manager, mock_logger, mock_pr
             "/download/archive",
             json_data={"assetIds": ["1", "2"]},
             stream=True,
-            expected_type=None
+            expected_type=None,
+            headers={}
         )
-        mock_logger.append.assert_any_call("Downloading archive: test_bucket.zip")
+        mock_logger.append.assert_any_call("Starting fresh download: test_bucket.zip")
         mock_progress_bar.setValue.assert_any_call(100)
 
 
@@ -291,8 +280,7 @@ def test_format_size():
 
 def test_format_time_bucket():
     """Test format_time_bucket method."""
-    assert ExportManager.format_time_bucket("2024-12-20T00:00:00Z", format="MONTH") == "December_2024"
-    assert ExportManager.format_time_bucket("2024-12-20T00:00:00Z", format="DAY") == "20.12.2024"
+    assert ExportManager.format_time_bucket("2024-12-20T00:00:00Z") == "December_2024"
 
 
 def test_calculate_file_checksum(tmp_path):
