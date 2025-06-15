@@ -180,7 +180,7 @@ When contributing new features, please ensure that you add appropriate tests and
 
 2. **Configure Export**:
 
-   - Choose archive size, grouping (day/month), and the output directory.
+   - Choose archive size and the output directory.
 
 3. **Fetch Buckets**:
 
