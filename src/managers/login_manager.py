@@ -8,6 +8,19 @@ class LoginManager:
         self.api_manager = None
         self.config = config or {}
 
+    def update_config(self, config: dict):
+        """Update the configuration."""
+        self.config = config or {}
+        # If we have an active API manager, update its config too
+        if self.api_manager:
+            self.api_manager.update_config(self.config)
+
+    def set_logger(self, logger):
+        """Set the logger for this login manager and any existing API manager."""
+        self.logger = logger
+        if self.api_manager:
+            self.api_manager.set_logger(logger)
+
     def set_credentials(self, server_ip: str, api_key: str, remember_me: bool):
         # Ensure the server_ip starts with 'http://' or 'https://'
         if not (server_ip.startswith("http://") or server_ip.startswith("https://")):
@@ -21,6 +34,10 @@ class LoginManager:
         if remember_me:
             save_settings(server_ip, api_key)
         self.api_manager = APIManager(server_ip, api_key, config=self.config)
+
+        # Set logger if we have one stored
+        if hasattr(self, 'logger') and self.logger:
+            self.api_manager.set_logger(self.logger)
 
     def getApiManager(self):
         return self.api_manager

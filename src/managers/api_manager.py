@@ -26,15 +26,28 @@ class APIManager:
     def set_logger(self, logger: Logger):
         self.logger = logger
 
+    def update_config(self, config: dict):
+        """Update the configuration and refresh debug settings."""
+        self.config = config or {}
+        self.debug = self.config.get('debug', {
+            'verbose_logging': False,
+            'log_api_requests': False,
+            'log_api_responses': False,
+            'log_request_bodies': False
+        })
+
     def log(self, message: str, force: bool = False):
         if self.logger and (force or self.debug.get('verbose_logging', False)):
             self.logger.append(message)
 
-    def get_headers(self) -> Dict[str, str]:
-        return {
+    def get_headers(self, custom_headers: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        headers = {
             "x-api-key": self.api_key,
             "Content-Type": "application/json"
         }
+        if custom_headers:
+            headers.update(custom_headers)
+        return headers
 
     def _handle_response(self, response: requests.Response, expected_type: Optional[type] = None) -> Any:
         try:
@@ -104,17 +117,16 @@ class APIManager:
         url = f"{self.server_url}{endpoint}"
 
         if self.debug.get('log_api_requests', False):
-            self.log(f"Making {method} request to: {url}")
-            self.log(f"Request headers: {self.get_headers()}")
+            self.log(f"Making {method} request to: {url}", force=True)
 
-        if kwargs.get('json_data') and self.debug.get('log_request_bodies', False):
-            self.log(f"Request body: {kwargs['json_data']}")
+        if self.debug.get('log_request_bodies', False) and kwargs.get('json_data'):
+            self.log(f"Request body: {kwargs['json_data']}", force=True)
 
         try:
             response = requests.request(
                 method=method,
                 url=url,
-                headers=self.get_headers(),
+                headers=self.get_headers(kwargs.get('headers')),
                 json=kwargs.get('json_data'),
                 stream=kwargs.get('stream', False)
             )
@@ -122,12 +134,23 @@ class APIManager:
             if self.debug.get('log_api_responses', False):
                 if not kwargs.get('stream'):
                     try:
-                        self.log(f"Response status: {response.status_code}")
-                        self.log(f"Response body: {response.text[:1000]}...")
-                    except:
-                        self.log("Could not log response body")
+                        self.log(f"Response status: {response.status_code}", force=True)
+
+                        # Check if response is likely binary data
+                        content_type = response.headers.get('content-type', '').lower()
+                        if any(binary_type in content_type for binary_type in ['image/', 'application/octet-stream', 'video/', 'audio/']):
+                            self.log(f"Response body: <Binary data - {content_type}, {len(response.content)} bytes>", force=True)
+                        else:
+                            # Try to log as text, but handle encoding issues
+                            try:
+                                response_text = response.text[:1000]
+                                self.log(f"Response body: {response_text}{'...' if len(response.text) > 1000 else ''}", force=True)
+                            except UnicodeDecodeError:
+                                self.log(f"Response body: <Binary data - could not decode as text, {len(response.content)} bytes>", force=True)
+                    except Exception as e:
+                        self.log(f"Could not log response body: {str(e)}", force=True)
                 else:
-                    self.log(f"Streaming response started with status: {response.status_code}")
+                    self.log(f"Streaming response started with status: {response.status_code}", force=True)
 
             return response
 
@@ -141,9 +164,9 @@ class APIManager:
         response = self._make_request('GET', endpoint)
         return self._handle_response(response, expected_type)
 
-    def post(self, endpoint: str, json_data: Optional[dict] = None, stream: bool = False, expected_type: Optional[type] = None) -> Any:
+    def post(self, endpoint: str, json_data: Optional[dict] = None, stream: bool = False, expected_type: Optional[type] = None, headers: Optional[Dict[str, str]] = None) -> Any:
         """Make a POST request to the API."""
-        response = self._make_request('POST', endpoint, json_data=json_data, stream=stream)
+        response = self._make_request('POST', endpoint, json_data=json_data, stream=stream, headers=headers)
         return self._handle_response(response, expected_type)
 
     def get_server_info(self) -> dict:
