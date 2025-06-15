@@ -17,6 +17,7 @@ class Logger:
         self.log_queue = queue.Queue()
         self.write_thread = None
         self.should_stop = False
+        self.line_number = 0  # Track line numbers for UI display
 
         # Skip file logging in test mode
         self.test_mode = test_mode
@@ -75,17 +76,28 @@ class Logger:
 
     def append(self, message, level=logging.INFO):
         """Log a message both to file and UI widget if available."""
-        # Update UI immediately
-        if self.logs_widget:
-            self.logs_widget.append(message)
+        # Increment line number for UI display
+        self.line_number += 1
 
-        # Queue message for file logging if not in test mode
+        # Update UI immediately with line number
+        if self.logs_widget:
+            # Calculate width needed for current line number (minimum 4 digits)
+            width = max(4, len(str(self.line_number)))
+            # Format message with dynamic width line number for UI display
+            formatted_message = f"[{self.line_number:0{width}d}] {message}"
+            self.logs_widget.append(formatted_message)
+
+        # Queue original message (without line number) for file logging if not in test mode
         if not self.test_mode:
             self.log_queue.put((message, level))
 
     def get_log_file_path(self):
         """Return the path to the current log file."""
         return self.current_log_file
+
+    def reset_line_numbers(self):
+        """Reset line numbers back to 0. Useful when clearing logs."""
+        self.line_number = 0
 
     def __del__(self):
         """Clean up logging handlers and stop background thread."""
@@ -147,10 +159,10 @@ def display_avatar(app_window, fetch_avatar):
 
         # Set the rounded pixmap to the QLabel
         app_window.avatar_label.setPixmap(rounded_pixmap)
-        app_window.logs.append("Avatar displayed successfully.")
+        app_window.logger.append("Avatar displayed successfully.")
 
     except Exception as e:
-        app_window.logs.append(f"Failed to process avatar image: {str(e)}")
+        app_window.logger.append(f"Failed to process avatar image: {str(e)}")
 
 def render_default_avatar(app_window):
     """Draws a default circular avatar with a simple person silhouette."""
@@ -213,14 +225,23 @@ def get_path_in_app(relative_path):
     return os.path.join(get_app_directory(), relative_path)
 
 def save_settings(server_ip, api_key):
-    """Save login settings to file."""
-    settings = {
+    """Save login settings to file, preserving existing config."""
+    # Load existing config first
+    try:
+        with open(get_path_in_app(CONFIG_FILE), 'r') as f:
+            settings = json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        settings = {}
+
+    # Update only the login settings
+    settings.update({
         'server_ip': server_ip,
         'api_key': api_key
-    }
+    })
+
     try:
         with open(get_path_in_app(CONFIG_FILE), 'w') as f:
-            json.dump(settings, f)
+            json.dump(settings, f, indent=2)
     except Exception as e:
         print(f"Error saving settings: {e}")
 
