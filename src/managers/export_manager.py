@@ -462,10 +462,19 @@ class ExportManager:
                                 # Log progress every 1%
                                 if progress >= last_logged_progress + 1:
                                     last_logged_progress = progress
-                                    if actual_resume:
-                                        self.log(f"Download progress: {progress}% (Total: {self.format_size(total_bytes_written)}, Session: +{self.format_size(session_downloaded)})")
+
+                                    # Calculate download speed
+                                    elapsed_time = time.time() - start_time
+                                    if elapsed_time > 0:
+                                        speed_mb = (total_bytes_written / elapsed_time) / (1024 ** 2)
+                                        speed_text = f", Speed: {speed_mb:.2f} MB/s"
                                     else:
-                                        self.log(f"Download progress: {progress}% ({self.format_size(total_bytes_written)})")
+                                        speed_text = ""
+
+                                    if actual_resume:
+                                        self.log(f"Download progress: {progress}% (Total: {self.format_size(total_bytes_written)}, Session: +{self.format_size(session_downloaded)}){speed_text}")
+                                    else:
+                                        self.log(f"Download progress: {progress}% ({self.format_size(total_bytes_written)}){speed_text}")
 
                                 # Save resume metadata periodically (but not if range not supported and we're in fresh download)
                                 current_time = time.time()
