@@ -200,15 +200,15 @@ ArchImmich automatically logs all operations to help with troubleshooting:
 
 - **Log Location**:
 
-  - Logs are stored in the `logs` directory within the application folder
+  - Logs are stored in the user data directory for persistence across app updates
   - Each session creates a new log file
 
   **Examples:**
 
-  - **Windows**: `C:\path\to\ArchImmich\logs\archimmich_20240612_123456.log`
-  - **macOS**: `/Applications/ArchImmich.app/Contents/Resources/logs/archimmich_20240612_123456.log`
-  - **Linux**: `/path/to/archimmich/logs/archimmich_20240612_123456.log`
-  - **From Source**: `./logs/archimmich_20240612_123456.log`
+  - **Windows**: `%APPDATA%\ArchImmich\logs\archimmich_20240612_123456.log`
+  - **macOS**: `~/Library/Application Support/ArchImmich/logs/archimmich_20240612_123456.log`
+  - **Linux**: `~/.config/ArchImmich/logs/archimmich_20240612_123456.log`
+  - **From Source**: `~/.config/ArchImmich/logs/archimmich_20240612_123456.log`
 
 - **Log Format**:
 
@@ -228,14 +228,14 @@ ArchImmich stores your configuration in a JSON file:
 
 - **Config Location**:
 
-  - The config file is stored as `config.json` in the application folder
+  - The config file is stored as `config.json` in the user data directory for persistence across app updates
 
   **Examples:**
 
-  - **Windows**: `C:\path\to\ArchImmich\config.json`
-  - **macOS**: `/Applications/ArchImmich.app/Contents/Resources/config.json`
-  - **Linux**: `/path/to/archimmich/config.json`
-  - **From Source**: `./config.json`
+  - **Windows**: `%APPDATA%\ArchImmich\config.json`
+  - **macOS**: `~/Library/Application Support/ArchImmich/config.json`
+  - **Linux**: `~/.config/ArchImmich/config.json`
+  - **From Source**: `~/.config/ArchImmich/config.json`
 
 - **Config Contents**:
   - Server URL
@@ -314,10 +314,6 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 For feedback, issues, or questions:
 
 - **GitHub Issues**: [https://github.com/osa911/archimmich/issues](https://github.com/osa911/archimmich/issues)
-
-## License
-
-MIT
 
 ## Author
 

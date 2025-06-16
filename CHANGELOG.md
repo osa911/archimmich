@@ -26,6 +26,8 @@ All notable changes to this project will be documented in this file.
 - **Enhanced Logging**: Background logging with thread-based queue system for improved performance and saving logs to file per session.
 - **Better Configuration Management**: Centralized settings with JSON-based storage and debug options.
 - **Window Management**: Improved window dimensions, minimum size constraints, and responsive layout.
+- **Config File**: The config file is stored as `config.json` in the user data directory for persistence across app updates
+- **Settings Migration**: Settings are automatically migrated from old locations when upgrading
 
 ### Fixed
 
