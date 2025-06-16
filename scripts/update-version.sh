@@ -15,6 +15,10 @@ echo $VERSION > version.txt
 sed -i.bak "s/VERSION = \".*\"/VERSION = \"$VERSION\"/" src/constants.py
 rm src/constants.py.bak
 
+# Update __init__.py
+sed -i.bak "s/__version__ = \".*\"/__version__ = \"$VERSION\"/" src/__init__.py
+rm src/__init__.py.bak
+
 # Update Info.plist
 sed -i.bak "s/<string>[0-9]\.[0-9]\.[0-9]<\/string>/<string>$VERSION<\/string>/" src/resources/Info.plist
 rm src/resources/Info.plist.bak
