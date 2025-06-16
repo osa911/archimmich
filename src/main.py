@@ -8,12 +8,15 @@ sys.path.append(project_root)
 
 from src.ui.main_window import MainWindow
 from PyQt5.QtWidgets import QApplication
-from src.utils.helpers import get_path_in_app
+from src.utils.helpers import get_path_in_app, migrate_config_if_needed
 from src.constants import CONFIG_FILE
 
 
 def load_config():
     """Load configuration from config.json."""
+    # Migrate config from old location if needed
+    migrate_config_if_needed()
+
     try:
         with open(get_path_in_app(CONFIG_FILE), 'r') as f:
             return json.load(f)

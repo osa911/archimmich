@@ -215,10 +215,58 @@ def render_default_avatar(app_window):
     app_window.logs.append("Default avatar displayed.")
 
 def get_app_directory():
-    """Get the application directory path."""
-    # Get application directory
+    """Get the user data directory path for storing config and logs."""
+    import platform
+
+    system = platform.system()
+    home = os.path.expanduser("~")
+
+    if system == "Darwin":  # macOS
+        # Use ~/Library/Application Support/ArchImmich
+        app_data_dir = os.path.join(home, "Library", "Application Support", "ArchImmich")
+    elif system == "Windows":
+        # Use %APPDATA%/ArchImmich
+        app_data_dir = os.path.join(os.environ.get("APPDATA", home), "ArchImmich")
+    else:  # Linux and other Unix-like systems
+        # Use ~/.config/ArchImmich (following XDG Base Directory Specification)
+        xdg_config_home = os.environ.get("XDG_CONFIG_HOME", os.path.join(home, ".config"))
+        app_data_dir = os.path.join(xdg_config_home, "ArchImmich")
+
+    # Create directory if it doesn't exist
+    os.makedirs(app_data_dir, exist_ok=True)
+
+    return app_data_dir
+
+def get_old_app_directory():
+    """Get the old application directory path (where config was previously stored)."""
+    # Get old application directory (where the app is installed)
     app_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     return app_dir
+
+def migrate_config_if_needed():
+    """Migrate config file from old app directory to new user data directory if needed."""
+    from src.constants import CONFIG_FILE
+    import shutil
+
+    old_config_path = os.path.join(get_old_app_directory(), CONFIG_FILE)
+    new_config_path = get_path_in_app(CONFIG_FILE)
+
+    # If new config already exists, no migration needed
+    if os.path.exists(new_config_path):
+        return False
+
+    # If old config exists, migrate it
+    if os.path.exists(old_config_path):
+        try:
+            shutil.copy2(old_config_path, new_config_path)
+            print(f"✓ Migrated config from {old_config_path} to {new_config_path}")
+            print(f"✓ Your settings will now persist across app updates")
+            return True
+        except Exception as e:
+            print(f"✗ Failed to migrate config: {e}")
+            return False
+
+    return False
 
 def get_path_in_app(relative_path):
     """Get absolute path to a file in the app directory, for user data files like config and logs."""
