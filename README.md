@@ -97,36 +97,6 @@ python3 src/main.py
 
 ---
 
-## **Building the Executable**
-
-To package the application into a standalone executable:
-
-1. **Install PyInstaller**:
-
-   ```bash
-   pip install pyinstaller
-   ```
-
-2. **Build the Executable**:
-
-   **Note_Windows**: If you want to build for Windows from Linux/MacOS, you will need to install **Wine** to build the executable.
-
-   **Note_MacOS**: If you want to build for MacOS with DMG, you will need to install **create-dmg** to build the package.
-
-   **Note_Linux**: If you want to build for Linux, you will need to install **Docker** to build the package.
-
-   ```bash
-   sh scripts/build-all-platforms.sh
-   ```
-
-3. The built application will be available in:
-   - `dist/ArchImmich.app` - The executable application
-   - `release/ArchImmich_MacOS_v{version}.dmg` - The macOS disk image
-   - `release/ArchImmich_Linux_v{version}.tar.gz` - The Linux package
-   - `release/ArchImmich_Windows_v{version}.zip` - The Windows package
-
----
-
 ## **Running Tests**
 
 ArchImmich includes a comprehensive test suite to ensure code quality and functionality. To run the tests:
@@ -168,6 +138,125 @@ ArchImmich includes a comprehensive test suite to ensure code quality and functi
    ```
 
 When contributing new features, please ensure that you add appropriate tests and that all existing tests pass.
+
+---
+
+## Building into standalone applications
+
+To package the application into standalone executables for all platforms:
+
+### Quick Start
+
+```bash
+# Install PyInstaller (if building locally)
+pip install pyinstaller
+
+# Build for all platforms
+./scripts/build-all-platforms.sh
+```
+
+### Platform-Specific Builds
+
+```bash
+./scripts/build-macos.sh    # macOS .dmg
+./scripts/build-linux.sh    # Linux .tar.gz (uses Docker)
+./scripts/build-windows.sh  # Windows .zip (uses Wine)
+```
+
+### Build Output
+
+The built applications will be available in the `release/` directory:
+
+- `ArchImmich_MacOS_v{version}.dmg` - macOS disk image
+- `ArchImmich_Linux_v{version}.tar.gz` - Linux package
+- `ArchImmich_Windows_v{version}.zip` - Windows package with `.exe`
+
+### Cross-Platform Building Setup
+
+#### Windows Builds on macOS/Linux (using Wine)
+
+To build Windows `.exe` files on macOS or Linux, you need Wine with Windows Python:
+
+1. **Install Wine**:
+
+   ```bash
+   # macOS (using Homebrew)
+   brew install wine-stable
+
+   # Ubuntu/Debian
+   sudo apt install wine
+   ```
+
+2. **Install Windows Python in Wine** (one-time setup):
+
+   ```bash
+   # Download and install Python for Windows
+   curl -L -o /tmp/python-3.11.6-amd64.exe https://www.python.org/ftp/python/3.11.6/python-3.11.6-amd64.exe
+   wine /tmp/python-3.11.6-amd64.exe /quiet InstallAllUsers=1 PrependPath=1
+   rm /tmp/python-3.11.6-amd64.exe
+   ```
+
+3. **Install PyInstaller and dependencies in Wine**:
+
+   ```bash
+   wine python -m pip install pyinstaller PyQt5 requests Pillow
+   ```
+
+4. **Verify setup**:
+
+   ```bash
+   wine python --version        # Should show Python 3.11.6
+   wine pyinstaller --version   # Should show PyInstaller version
+   ```
+
+5. **Build Windows executable**:
+   ```bash
+   ./scripts/build-windows.sh   # Now creates proper .exe files
+   ```
+
+#### Linux Builds (using Docker)
+
+Linux builds automatically use Docker with Python 3.11 to ensure compatibility.
+
+#### macOS Builds
+
+macOS builds run natively and create `.dmg` packages using `create-dmg`.
+
+### Build Requirements
+
+- **macOS**: `create-dmg` (install via `brew install create-dmg`)
+- **Linux**: Docker
+- **Windows**: Wine with Windows Python and PyInstaller (see setup above)
+
+### Quick Wine Setup (for Windows builds)
+
+If you need to set up Wine for Windows builds, run these commands:
+
+```bash
+# Install Wine (macOS)
+brew install wine-stable
+
+# One-time Wine setup for Windows builds
+curl -L -o /tmp/python-3.11.6-amd64.exe https://www.python.org/ftp/python/3.11.6/python-3.11.6-amd64.exe
+wine /tmp/python-3.11.6-amd64.exe /quiet InstallAllUsers=1 PrependPath=1
+wine python -m pip install pyinstaller PyQt5 requests Pillow
+rm /tmp/python-3.11.6-amd64.exe
+
+# Verify setup
+wine python --version && wine pyinstaller --version
+```
+
+### Troubleshooting
+
+**Wine Issues**:
+
+- If Wine setup fails, try: `winecfg` to initialize Wine configuration
+- Ensure Wine prefix is clean: `rm -rf ~/.wine && winecfg`
+
+**Build Failures**:
+
+- Check that all dependencies are installed in the target environment
+- For Wine builds, verify: `wine python -c "import PyQt5; print('PyQt5 OK')"`
 
 ---
 
