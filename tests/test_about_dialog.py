@@ -50,7 +50,7 @@ class TestAboutDialog:
                     break
 
         # Alternative check - just verify VERSION constant is used
-        assert VERSION == "0.0.3"  # Current version from constants
+        assert VERSION == "0.1.0"  # Current version from constants
 
     def test_dialog_has_buttons(self, about_dialog):
         """Test that the dialog has the expected buttons."""
