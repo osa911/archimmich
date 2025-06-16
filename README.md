@@ -335,11 +335,12 @@ If you encounter any issues with the application, please include the relevant lo
 
 ---
 
+
 ## **Screenshots**
 
 | light theme                                                                               | dark theme                                                                                |
 | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| ![image](https://github.com/user-attachments/assets/aa5f42ae-a4fd-4ecb-b3c9-12e9b55886e7) | ![image](https://github.com/user-attachments/assets/fa0179fd-c3cd-4dc8-9b28-6259b2192c1a) |
+| ![image](https://github.com/user-attachments/assets/f45d2f57-ff7c-48f6-ae00-dcbdc5b4b1e9) | ![image](https://github.com/user-attachments/assets/439721f1-ee8c-49fa-ad75-b7bcad8f5ad0) |
 
 ---
 
