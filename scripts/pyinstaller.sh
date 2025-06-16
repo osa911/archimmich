@@ -18,9 +18,14 @@ esac
 
 # Use wine on Windows
 if [ "$(uname)" != "Darwin" ] && [ "$(uname)" != "Linux" ]; then
-  PYINSTALLER="wine pyinstaller"
+  PYINSTALLER="wine python3 -m PyInstaller"
 else
-  PYINSTALLER="pyinstaller"
+  # Try pyinstaller command first, fallback to python module
+  if command -v pyinstaller >/dev/null 2>&1; then
+    PYINSTALLER="pyinstaller"
+  else
+    PYINSTALLER="python3 -m PyInstaller"
+  fi
 fi
 
 # Clean previous builds

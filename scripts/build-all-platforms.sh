@@ -37,10 +37,15 @@ docker run --rm -v "$SCRIPT_DIR/../:/app" -w /app python:3.11-bullseye \
     sh /app/scripts/build-linux.sh;"
 echo "Linux build completed!"
 
-# 3. Build for Windows
+# 3. Build for Windows (requires Wine with Python/PyInstaller)
 echo "Starting Windows build..."
 rm -rf dist build;
-sh "$SCRIPT_DIR/build-windows.sh"
-echo "Windows build completed!"
+if command -v wine >/dev/null 2>&1; then
+    sh "$SCRIPT_DIR/build-windows.sh"
+    echo "Windows build completed!"
+else
+    echo "Warning: Wine not found. Skipping Windows build."
+    echo "Install Wine and run: wine python -m pip install pyinstaller PyQt5 requests Pillow"
+fi
 
 echo "All builds completed successfully! Check the 'release' folder for artifacts."
