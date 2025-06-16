@@ -286,6 +286,7 @@ When releasing a new version:
 
    - `version.txt`
    - `src/constants.py`
+   - `src/__init__.py`
    - `src/resources/Info.plist`
    - `src/resources/version.rc`
    - `src/resources/archimmich.desktop`
