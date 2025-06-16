@@ -4,7 +4,7 @@ import hashlib
 import json
 from datetime import datetime
 from PyQt5.QtWidgets import QApplication
-from src.utils.helpers import Logger
+from src.utils.helpers import get_path_in_app
 
 class ExportManager:
     def __init__(self, api_manager, logger, output_dir, stop_flag_callback):
@@ -20,8 +20,14 @@ class ExportManager:
         self.output_dir = output_dir
         self.stop_flag = stop_flag_callback
         # Don't set logger on API manager here since it should already be set
-        # Resume functionality
-        self.resume_metadata_dir = os.path.join(output_dir, ".archimmich_resume")
+
+        # Resume functionality - use user data directory if no output_dir specified
+        if output_dir and output_dir.strip():
+            self.resume_metadata_dir = os.path.join(output_dir, ".archimmich_resume")
+        else:
+            # Use user data directory for resume metadata when no output dir specified
+            self.resume_metadata_dir = get_path_in_app(".archimmich_resume")
+
         os.makedirs(self.resume_metadata_dir, exist_ok=True)
         self.range_support_cache = {}  # Cache Range header support per server
 
