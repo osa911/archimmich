@@ -144,15 +144,23 @@ class ExportManager:
             self.log(f"Failed to fetch bucket assets: {str(e)}")
             raise
 
-    def prepare_archive(self, asset_ids, archive_size_bytes):
-        if not asset_ids:
-            self.log("No assets provided for archive preparation")
+    def prepare_archive(self, asset_ids=None, archive_size_bytes=None, album_id=None):
+        if not asset_ids and not album_id:
+            self.log("Neither asset IDs nor album ID provided for archive preparation")
             return {"totalSize": 0}
 
+        if asset_ids and album_id:
+            self.log("Both asset IDs and album ID provided - using album ID")
+
         payload = {
-            "assetIds": asset_ids,
             "archiveSize": archive_size_bytes
         }
+
+        if album_id:
+            payload["albumId"] = album_id
+        else:
+            payload["assetIds"] = asset_ids
+
         try:
             response = self.api_manager.post("/download/info", json_data=payload, expected_type=dict)
             if not response or not isinstance(response.get('totalSize'), (int, float)):
@@ -268,9 +276,9 @@ class ExportManager:
 
         return existing_files, missing_files
 
-    def download_archive(self, asset_ids, bucket_name, total_size, current_download_progress_bar):
-        if not asset_ids:
-            self.log("No assets provided for download")
+    def download_archive(self, asset_ids=None, bucket_name=None, total_size=None, current_download_progress_bar=None, album_id=None):
+        if not asset_ids and not album_id:
+            self.log("No assets or album provided for download")
             return
 
         archive_path = os.path.join(self.output_dir, f"{bucket_name}.zip")
@@ -332,7 +340,12 @@ class ExportManager:
                 if os.path.exists(partial_archive_path):
                     os.remove(partial_archive_path)
 
-            payload = {"assetIds": asset_ids}
+            payload = {}
+            if album_id:
+                payload["albumId"] = album_id
+            else:
+                payload["assetIds"] = asset_ids
+
             try:
                 response = self.api_manager.post(
                     "/download/archive",
@@ -348,7 +361,7 @@ class ExportManager:
                         if os.path.exists(partial_archive_path):
                             os.remove(partial_archive_path)
                         self.cleanup_resume_metadata(bucket_name)
-                        return self.download_archive(asset_ids, bucket_name, total_size, current_download_progress_bar)
+                        return self.download_archive(asset_ids=asset_ids, album_id=album_id, bucket_name=bucket_name, total_size=total_size, current_download_progress_bar=current_download_progress_bar)
                     else:
                         self.log(f"Failed to start download for {bucket_name}.zip: {response.status_code if response else 'No response'}")
                         return "error"

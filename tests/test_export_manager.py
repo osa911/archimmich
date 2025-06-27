@@ -222,7 +222,7 @@ def test_get_timeline_buckets_invalid_response(export_manager, mock_api_manager)
 
 
 def test_prepare_archive(export_manager, mock_api_manager):
-    """Test preparing an archive."""
+    """Test preparing an archive with asset IDs."""
     mock_response = {"totalSize": 1024}
     mock_api_manager.post.return_value = mock_response
 
@@ -231,7 +231,57 @@ def test_prepare_archive(export_manager, mock_api_manager):
         archive_size_bytes=1024
     )
 
+    mock_api_manager.post.assert_called_once_with(
+        "/download/info",
+        json_data={"assetIds": ["1", "2", "3"], "archiveSize": 1024},
+        expected_type=dict
+    )
     assert result == mock_response
+
+
+def test_prepare_archive_with_album_id(export_manager, mock_api_manager):
+    """Test preparing an archive with album ID."""
+    mock_response = {"totalSize": 2048}
+    mock_api_manager.post.return_value = mock_response
+
+    result = export_manager.prepare_archive(
+        album_id="album123",
+        archive_size_bytes=1024
+    )
+
+    mock_api_manager.post.assert_called_once_with(
+        "/download/info",
+        json_data={"albumId": "album123", "archiveSize": 1024},
+        expected_type=dict
+    )
+    assert result == mock_response
+
+
+def test_prepare_archive_with_both_ids(export_manager, mock_api_manager):
+    """Test preparing an archive with both asset IDs and album ID (should prefer album ID)."""
+    mock_response = {"totalSize": 2048}
+    mock_api_manager.post.return_value = mock_response
+
+    result = export_manager.prepare_archive(
+        asset_ids=["1", "2", "3"],
+        album_id="album123",
+        archive_size_bytes=1024
+    )
+
+    mock_api_manager.post.assert_called_once_with(
+        "/download/info",
+        json_data={"albumId": "album123", "archiveSize": 1024},
+        expected_type=dict
+    )
+    assert result == mock_response
+
+
+def test_prepare_archive_no_ids(export_manager, mock_api_manager):
+    """Test preparing an archive with neither asset IDs nor album ID."""
+    result = export_manager.prepare_archive(archive_size_bytes=1024)
+
+    assert result == {"totalSize": 0}
+    mock_api_manager.post.assert_not_called()
 
 
 def test_download_archive(export_manager, mock_api_manager, mock_logger, mock_progress_bar):
@@ -401,3 +451,44 @@ def test_download_archive_speed_calculation_edge_cases(export_manager, mock_api_
             if "Speed:" in log:
                 # If speed is shown, it should handle the edge case gracefully
                 assert "MB/s" in log
+
+
+def test_download_archive_with_album_id(export_manager, mock_api_manager, mock_logger, mock_progress_bar):
+    """Test downloading an archive using album ID."""
+    mock_api_manager.post.return_value.iter_content = MagicMock(return_value=[b"chunk1", b"chunk2"])
+    mock_api_manager.post.return_value.ok = True
+    mock_api_manager.post.return_value.headers = {}
+
+    with patch('builtins.open', MagicMock()), \
+         patch('os.path.exists', return_value=False), \
+         patch('os.makedirs'):
+
+        export_manager.download_archive(
+            album_id="album123",
+            bucket_name="test_album",
+            total_size=2048,
+            current_download_progress_bar=mock_progress_bar
+        )
+
+        mock_api_manager.post.assert_called_once_with(
+            "/download/archive",
+            json_data={"albumId": "album123"},
+            stream=True,
+            expected_type=None,
+            headers={}
+        )
+        mock_logger.append.assert_any_call("Starting fresh download: test_album.zip")
+        mock_progress_bar.setValue.assert_any_call(100)
+
+
+def test_download_archive_no_ids(export_manager, mock_api_manager, mock_logger, mock_progress_bar):
+    """Test downloading an archive with neither asset IDs nor album ID."""
+    result = export_manager.download_archive(
+        bucket_name="test_bucket",
+        total_size=2048,
+        current_download_progress_bar=mock_progress_bar
+    )
+
+    assert result is None
+    mock_logger.append.assert_called_with("No assets or album provided for download")
+    mock_api_manager.post.assert_not_called()
