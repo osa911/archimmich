@@ -3,7 +3,7 @@ from PyQt5.QtWidgets import (
     QSizePolicy, QHBoxLayout, QPushButton, QFrame
 )
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QGuiApplication, QPixmap
+from PyQt5.QtGui import QGuiApplication, QPixmap, QIcon
 
 from src.ui.components.auto_scroll_text_edit import AutoScrollTextEdit
 from src.ui.components.debug_settings_dialog import DebugSettingsDialog
@@ -168,7 +168,8 @@ class MainWindow(QMainWindow):
 
         # Logout button under the user text
         self.logout_button = QPushButton("Logout")
-        self.logout_button.setMaximumWidth(80)
+        self.logout_button.setIcon(QIcon(get_resource_path("src/resources/icons/logout-icon.svg")))
+        self.logout_button.setMaximumWidth(90)
         self.logout_button.setMaximumHeight(25)
         self.logout_button.clicked.connect(self.logout)
         self.logout_button.hide()

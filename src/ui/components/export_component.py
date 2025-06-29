@@ -4,12 +4,13 @@ from PyQt5.QtWidgets import (
     QApplication, QRadioButton, QButtonGroup, QTabWidget
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QIntValidator
+from PyQt5.QtGui import QIntValidator, QIcon
 
 from src.ui.components.auto_scroll_text_edit import AutoScrollTextEdit
 from src.ui.components.export_methods import ExportMethods
 from src.ui.components.divider_factory import HorizontalDivider, VerticalDivider
 from src.managers.export_manager import ExportManager
+from src.utils.helpers import get_resource_path
 
 import os
 
@@ -41,8 +42,10 @@ class ExportComponent(QWidget, ExportMethods):
     def setup_tab_widget(self, layout: QVBoxLayout | QHBoxLayout):
         """Setup the tab widget."""
         self.tab_widget = QTabWidget()
-        self.tab_widget.addTab(self.setup_timeline_tab(), "Timeline")
-        self.tab_widget.addTab(self.setup_albums_tab(), "Albums")
+        timeline_icon = QIcon(get_resource_path("src/resources/icons/timeline-icon.svg"))
+        albums_icon = QIcon(get_resource_path("src/resources/icons/albums-icon.svg"))
+        self.tab_widget.addTab(self.setup_timeline_tab(), timeline_icon, "Timeline")
+        self.tab_widget.addTab(self.setup_albums_tab(), albums_icon, "Albums")
         layout.addWidget(self.tab_widget)
 
     def setup_timeline_tab(self):
@@ -114,9 +117,19 @@ class ExportComponent(QWidget, ExportMethods):
     def init_config_section(self, layout: QVBoxLayout | QHBoxLayout):
         """Initialize configuration options in sidebar."""
         # Filter options
-        filters_label = QLabel("Filters:")
+        filters_label = QLabel()
         filters_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(filters_label)
+        filters_icon = QIcon(get_resource_path("src/resources/icons/filters-icon.svg"))
+        filters_label.setPixmap(filters_icon.pixmap(18, 18))
+        filters_text = QLabel("Filters")
+        filters_text.setStyleSheet("font-weight: bold;")
+
+        filters_header = QHBoxLayout()
+        filters_header.setContentsMargins(0, 0, 0, 0)
+        filters_header.addWidget(filters_label)
+        filters_header.addWidget(filters_text)
+        filters_header.addStretch()
+        layout.addLayout(filters_header)
 
         # Create 2-column layout for filters
         filters_container = QWidget()
@@ -183,9 +196,19 @@ class ExportComponent(QWidget, ExportMethods):
 
     def init_visibility_radios(self):
         """Initialize visibility radio buttons."""
-        visibility_label = QLabel("Visibility:")
+        visibility_label = QLabel()
         visibility_label.setStyleSheet("font-weight: bold;")
-        self.sidebar_layout.addWidget(visibility_label)
+        visibility_icon = QIcon(get_resource_path("src/resources/icons/visibility-icon.svg"))
+        visibility_label.setPixmap(visibility_icon.pixmap(18, 18))
+        visibility_text = QLabel("Visibility")
+        visibility_text.setStyleSheet("font-weight: bold;")
+
+        visibility_header = QHBoxLayout()
+        visibility_header.setContentsMargins(0, 0, 0, 0)
+        visibility_header.addWidget(visibility_label)
+        visibility_header.addWidget(visibility_text)
+        visibility_header.addStretch()
+        self.sidebar_layout.addLayout(visibility_header)
 
         # Create button group for visibility
         self.visibility_group = QButtonGroup()
@@ -235,6 +258,7 @@ class ExportComponent(QWidget, ExportMethods):
         # Fetch albums button
         fetch_layout = QHBoxLayout()
         self.fetch_albums_button = QPushButton("Fetch Albums")
+        self.fetch_albums_button.setIcon(QIcon(get_resource_path("src/resources/icons/download-icon.svg")))
         self.fetch_albums_button.clicked.connect(self.fetch_albums)
         fetch_layout.addWidget(self.fetch_albums_button)
         fetch_layout.addStretch()
@@ -321,9 +345,19 @@ class ExportComponent(QWidget, ExportMethods):
 
     def init_download_radios(self):
         """Initialize download type radio buttons."""
-        download_label = QLabel("Download Archives:")
+        download_label = QLabel()
         download_label.setStyleSheet("font-weight: bold;")
-        self.sidebar_layout.addWidget(download_label)
+        download_icon = QIcon(get_resource_path("src/resources/icons/archive-icon.svg"))
+        download_label.setPixmap(download_icon.pixmap(18, 18))
+        download_text = QLabel("Download Archives")
+        download_text.setStyleSheet("font-weight: bold;")
+
+        download_header = QHBoxLayout()
+        download_header.setContentsMargins(0, 0, 0, 0)
+        download_header.addWidget(download_label)
+        download_header.addWidget(download_text)
+        download_header.addStretch()
+        self.sidebar_layout.addLayout(download_header)
 
         # Create button group for download type
         self.download_group = QButtonGroup()
@@ -411,6 +445,7 @@ class ExportComponent(QWidget, ExportMethods):
         """Initialize fetch button at the top of main area."""
         fetch_layout = QHBoxLayout()
         self.fetch_button = QPushButton("Fetch Buckets")
+        self.fetch_button.setIcon(QIcon(get_resource_path("src/resources/icons/download-icon.svg")))
         self.fetch_button.clicked.connect(self.fetch_buckets)
         fetch_layout.addWidget(self.fetch_button)
         fetch_layout.addStretch()  # Push to left
@@ -428,6 +463,7 @@ class ExportComponent(QWidget, ExportMethods):
         # Output directory button row
         output_layout = QHBoxLayout()
         self.output_dir_button = QPushButton("Choose Directory")
+        self.output_dir_button.setIcon(QIcon(get_resource_path("src/resources/icons/folder-icon.svg")))
         self.output_dir_button.clicked.connect(self.select_output_dir)
         self.output_dir_button.hide()
         output_layout.addWidget(self.output_dir_button)
@@ -438,6 +474,7 @@ class ExportComponent(QWidget, ExportMethods):
         export_layout = QHBoxLayout()
 
         self.export_button = QPushButton("Export")
+        self.export_button.setIcon(QIcon(get_resource_path("src/resources/icons/archive-icon.svg")))
         self.export_button.clicked.connect(self.start_export)
         self.export_button.hide()
         export_layout.addWidget(self.export_button)
