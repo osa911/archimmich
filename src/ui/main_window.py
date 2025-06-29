@@ -115,6 +115,10 @@ class MainWindow(QMainWindow):
 
         self.layout.addWidget(self.main_splitter)
 
+        # Initialize auto-scroll setting from config
+        auto_scroll_enabled = self.config.get('debug', {}).get('auto_scroll_logs', True)
+        self.logs.set_auto_scroll(auto_scroll_enabled)
+
     def setup_header(self):
         """Setup the header bar with logo on left and user info on right."""
         self.header_widget = QWidget()

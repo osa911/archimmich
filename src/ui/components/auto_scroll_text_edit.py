@@ -11,14 +11,20 @@ class AutoScrollTextEdit(QTextEdit):
         super().__init__(parent)
         self.setReadOnly(True)
         self.setPlaceholderText("Logs will appear here...")
+        self.auto_scroll_enabled = True  # Default to auto-scroll enabled
 
     def append(self, text):
         """
-        Append text to the text edit and scroll to the bottom.
+        Append text to the text edit and scroll to the bottom if auto-scroll is enabled.
 
         Args:
             text (str): The text to append.
         """
         super().append(text)
-        self.moveCursor(QTextCursor.End)
-        self.ensureCursorVisible()
+        if self.auto_scroll_enabled:
+            self.moveCursor(QTextCursor.End)
+            self.ensureCursorVisible()
+
+    def set_auto_scroll(self, enabled: bool):
+        """Enable or disable auto-scrolling."""
+        self.auto_scroll_enabled = enabled
