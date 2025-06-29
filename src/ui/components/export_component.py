@@ -278,15 +278,31 @@ class ExportComponent(QWidget, ExportMethods):
             self.export_manager = ExportManager(api_manager, self.logger, "", self.stop_flag)
             self.albums = self.export_manager.get_albums()
 
-            # Add albums to the list
-            for album in self.albums:
-                checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
-                checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
-                self.albums_list_layout.addWidget(checkbox)
+            # Add albums to the list or show no albums message
+            if self.albums:
+                for album in self.albums:
+                    checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
+                    checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
+                    self.albums_list_layout.addWidget(checkbox)
+            else:
+                no_albums_label = QLabel("No albums found")
+                no_albums_label.setStyleSheet("color: gray; padding: 10px;")
+                no_albums_label.setAlignment(Qt.AlignCenter)
+                self.albums_list_layout.addWidget(no_albums_label)
+                # Hide select all checkbox when no albums
+                self.select_all_albums_checkbox.hide()
 
         except Exception as e:
             if self.logger:
                 self.logger.append(f"Error fetching albums: {str(e)}")
+            # Show error message in the UI
+            error_label = QLabel(f"Error fetching albums: {str(e)}")
+            error_label.setStyleSheet("color: red; padding: 10px;")
+            error_label.setAlignment(Qt.AlignCenter)
+            error_label.setWordWrap(True)
+            self.albums_list_layout.addWidget(error_label)
+            # Hide select all checkbox on error
+            self.select_all_albums_checkbox.hide()
 
     def toggle_select_all_albums(self, state):
         for i in range(1, self.albums_list_layout.count()):
