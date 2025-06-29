@@ -300,6 +300,8 @@ class MainWindow(QMainWindow):
         # Reset export component
         self.export_component.reset_filters()
         self.export_component.hide_export_ui()
+        self.export_component.albums_scroll_area.hide()
+        self.export_component.clear_albums_list()
 
         # Hide/show appropriate UI sections
         self.export_component.hide()

@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QCheckBox,
     QComboBox, QPushButton, QFileDialog, QProgressBar, QScrollArea, QFrame,
-    QApplication, QRadioButton, QButtonGroup
+    QApplication, QRadioButton, QButtonGroup, QTabWidget
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QIntValidator
@@ -34,49 +34,67 @@ class ExportComponent(QWidget, ExportMethods):
         """Setup the two-column export component UI."""
         # Main horizontal layout
         self.main_layout = QHBoxLayout(self)
-        self.main_layout.setContentsMargins(15, 0, 15, 0)  # Remove main layout margins
+        self.main_layout.setContentsMargins(10, 0, 10, 0)  # Remove main layout margins
         self.main_layout.setSpacing(0)  # No spacing, divider will handle separation
+        self.setup_tab_widget(self.main_layout)
 
+    def setup_tab_widget(self, layout: QVBoxLayout | QHBoxLayout):
+        """Setup the tab widget."""
+        self.tab_widget = QTabWidget()
+        self.tab_widget.addTab(self.setup_timeline_tab(), "Timeline")
+        self.tab_widget.addTab(self.setup_albums_tab(), "Albums")
+        layout.addWidget(self.tab_widget)
+
+    def setup_timeline_tab(self):
+        """Setup the timeline tab."""
+        timeline_tab = QWidget()
+        timeline_layout = QHBoxLayout(timeline_tab)
+        timeline_layout.setContentsMargins(10, 5, 10, 10)
+        timeline_layout.setSpacing(10)
         # Create left sidebar (30% width)
-        self.setup_sidebar()
+        self.setup_sidebar(timeline_layout)
 
         # Add vertical divider with margins
         divider_container = VerticalDivider(
-            margins={'left': 10, 'right': 10},
+            margins={'left': 10, 'right': 5},
             with_container=True
         )
-        self.main_layout.addWidget(divider_container)
+        timeline_layout.addWidget(divider_container)
 
         # Create right main area (70% width)
-        self.setup_main_area()
+        self.setup_main_area(timeline_layout)
+        return timeline_tab
 
-    def setup_sidebar(self):
+    def setup_sidebar(self, layout: QVBoxLayout | QHBoxLayout):
         """Setup the left sidebar with controls."""
-        self.sidebar = QWidget()
-        self.sidebar.setMaximumWidth(285)  # Fixed max width for sidebar
-        self.sidebar.setMinimumWidth(285)  # Minimum width for usability
+        sidebar = QWidget()
+        sidebar.setMaximumWidth(285)  # Fixed max width for sidebar
+        sidebar.setMinimumWidth(285)  # Minimum width for usability
 
-        self.sidebar_layout = QVBoxLayout(self.sidebar)
+        self.sidebar_layout = QVBoxLayout(sidebar)
         self.sidebar_layout.setContentsMargins(0, 0, 0, 0)  # Small internal margins
         self.sidebar_layout.setSpacing(10)
 
+        # Fetch button at the top
+        self.init_fetch_button(self.sidebar_layout)
+
+        # Add horizontal divider after fetch button
+        self.sidebar_layout.addWidget(HorizontalDivider())
+
         # Configuration section
-        self.init_config_section()
+        self.init_config_section(self.sidebar_layout)
 
         # Add stretch to push everything to the top
         self.sidebar_layout.addStretch()
 
         # Add sidebar to main layout
-        self.main_layout.addWidget(self.sidebar)
+        layout.addWidget(sidebar)
 
-    def setup_main_area(self):
+    def setup_main_area(self, layout: QVBoxLayout | QHBoxLayout):
         """Setup the right main area for content."""
         self.main_area = QWidget()
         self.main_area_layout = QVBoxLayout(self.main_area)
         self.main_area_layout.setContentsMargins(0, 0, 0, 0)  # Small internal margins
-
-        # Fetch button at the top
-        self.init_fetch_button()
 
         # Bucket list section
         self.init_bucket_list()
@@ -91,26 +109,24 @@ class ExportComponent(QWidget, ExportMethods):
         self.init_archives_display()
 
         # Add main area to layout
-        self.main_layout.addWidget(self.main_area)
+        layout.addWidget(self.main_area)
 
-    def init_config_section(self):
+    def init_config_section(self, layout: QVBoxLayout | QHBoxLayout):
         """Initialize configuration options in sidebar."""
         # Filter options
         filters_label = QLabel("Filters:")
         filters_label.setStyleSheet("font-weight: bold;")
-        self.sidebar_layout.addWidget(filters_label)
+        layout.addWidget(filters_label)
 
         # Create 2-column layout for filters
         filters_container = QWidget()
         filters_layout = QHBoxLayout(filters_container)
         filters_layout.setContentsMargins(0, 0, 0, 0)
-        # filters_layout.setSpacing(10)
 
         # Left column
         left_column = QWidget()
         left_layout = QVBoxLayout(left_column)
         left_layout.setContentsMargins(0, 0, 0, 0)
-        # left_layout.setSpacing(5)
 
         self.is_archived_check = QCheckBox("Is Archived?")
         left_layout.addWidget(self.is_archived_check)
@@ -126,7 +142,6 @@ class ExportComponent(QWidget, ExportMethods):
         right_column = QWidget()
         right_layout = QVBoxLayout(right_column)
         right_layout.setContentsMargins(0, 0, 0, 0)
-        # right_layout.setSpacing(5)
 
         self.with_stacked_check = QCheckBox("With Stacked?")
         right_layout.addWidget(self.with_stacked_check)
@@ -142,16 +157,16 @@ class ExportComponent(QWidget, ExportMethods):
         filters_layout.addWidget(left_column)
         filters_layout.addWidget(right_column)
 
-        self.sidebar_layout.addWidget(filters_container)
+        layout.addWidget(filters_container)
 
         # Add horizontal divider after filters
-        self.sidebar_layout.addWidget(HorizontalDivider())
+        layout.addWidget(HorizontalDivider())
 
         # Visibility radio buttons
         self.init_visibility_radios()
 
         # Add horizontal divider after visibility
-        self.sidebar_layout.addWidget(HorizontalDivider())
+        layout.addWidget(HorizontalDivider())
 
         # Download type radio buttons
         self.init_download_radios()
@@ -163,8 +178,8 @@ class ExportComponent(QWidget, ExportMethods):
         self.archive_size_field.setPlaceholderText("Enter size in GB")
         self.archive_size_field.setValidator(QIntValidator(1, 1024))
         self.archive_size_field.setText("4")
-        self.sidebar_layout.addWidget(self.archive_size_label)
-        self.sidebar_layout.addWidget(self.archive_size_field)
+        layout.addWidget(self.archive_size_label)
+        layout.addWidget(self.archive_size_field)
 
     def init_visibility_radios(self):
         """Initialize visibility radio buttons."""
@@ -211,7 +226,82 @@ class ExportComponent(QWidget, ExportMethods):
         self.sidebar_layout.addWidget(row1)
         self.sidebar_layout.addWidget(row2)
 
+    def setup_albums_tab(self):
+        albums_tab = QWidget()
+        albums_layout = QVBoxLayout(albums_tab)
+        albums_layout.setContentsMargins(10, 5, 10, 10)
+        albums_layout.setSpacing(10)
 
+        # Fetch albums button
+        fetch_layout = QHBoxLayout()
+        self.fetch_albums_button = QPushButton("Fetch Albums")
+        self.fetch_albums_button.clicked.connect(self.fetch_albums)
+        fetch_layout.addWidget(self.fetch_albums_button)
+        fetch_layout.addStretch()
+        albums_layout.addLayout(fetch_layout)
+        albums_layout.addStretch()
+
+        # Albums list
+        self.albums_scroll_area = QScrollArea()
+        self.albums_scroll_area.setWidgetResizable(True)
+        self.albums_scroll_area.hide()
+        albums_list_widget = QWidget()
+        self.albums_list_layout = QVBoxLayout(albums_list_widget)
+
+        self.select_all_albums_checkbox = QCheckBox("Select All")
+        self.select_all_albums_checkbox.stateChanged.connect(self.toggle_select_all_albums)
+        self.albums_list_layout.addWidget(self.select_all_albums_checkbox)
+
+        self.albums_scroll_area.setWidget(albums_list_widget)
+        albums_layout.addWidget(self.albums_scroll_area)
+
+        albums_tab.setLayout(albums_layout)
+        return albums_tab
+
+    def clear_albums_list(self):
+        while self.albums_list_layout.count() > 1:
+            item = self.albums_list_layout.takeAt(1)
+            if item.widget():
+                item.widget().deleteLater()
+
+    def fetch_albums(self):
+        if self.albums_scroll_area.isHidden():
+            self.albums_scroll_area.show()
+            self.tab_widget.currentWidget().layout().setStretchFactor(self.albums_scroll_area, 1)
+
+        # Clear existing albums
+        self.clear_albums_list()
+
+        # Fetch albums
+        try:
+            api_manager = self.login_manager.api_manager
+            self.export_manager = ExportManager(api_manager, self.logger, "", self.stop_flag)
+            self.albums = self.export_manager.get_albums()
+
+            # Add albums to the list
+            for album in self.albums:
+                checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
+                checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
+                self.albums_list_layout.addWidget(checkbox)
+
+        except Exception as e:
+            if self.logger:
+                self.logger.append(f"Error fetching albums: {str(e)}")
+
+    def toggle_select_all_albums(self, state):
+        for i in range(1, self.albums_list_layout.count()):
+            checkbox = self.albums_list_layout.itemAt(i).widget()
+            if checkbox:
+                checkbox.setChecked(state == Qt.Checked)
+
+    def get_selected_albums(self):
+        selected_albums = []
+        for i in range(1, self.albums_list_layout.count()):
+            checkbox = self.albums_list_layout.itemAt(i).widget()
+            if checkbox and checkbox.isChecked():
+                album = self.albums[i - 1]
+                selected_albums.append(album)
+        return selected_albums
 
     def init_download_radios(self):
         """Initialize download type radio buttons."""
@@ -301,14 +391,14 @@ class ExportComponent(QWidget, ExportMethods):
         self.bucket_scroll_area.hide()
         self.main_area_layout.addWidget(self.bucket_scroll_area)
 
-    def init_fetch_button(self):
+    def init_fetch_button(self, layout: QVBoxLayout | QHBoxLayout):
         """Initialize fetch button at the top of main area."""
         fetch_layout = QHBoxLayout()
         self.fetch_button = QPushButton("Fetch Buckets")
         self.fetch_button.clicked.connect(self.fetch_buckets)
         fetch_layout.addWidget(self.fetch_button)
         fetch_layout.addStretch()  # Push to left
-        self.main_area_layout.addLayout(fetch_layout)
+        layout.addLayout(fetch_layout)
 
     def init_control_buttons(self):
         """Initialize output directory and export controls in main area."""
