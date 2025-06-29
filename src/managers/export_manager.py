@@ -592,3 +592,48 @@ class ExportManager:
         self.range_support_cache[server_url] = supports_range
         if not supports_range:
             self.log(f"Note: Server {server_url} doesn't support Range headers - resume functionality limited")
+
+    def get_albums(self):
+        try:
+            response = self.api_manager.get("/albums", expected_type=list)
+            if not response:
+                self.log("No albums returned from API")
+                return []
+
+            validation_errors = []
+            valid_albums = []
+
+            for album in response:
+                error = self._validate_album(album)
+                if error:
+                    validation_errors.append(error)
+                    continue
+                valid_albums.append(album)
+
+            if validation_errors:
+                self._log_validation_errors(validation_errors)
+
+            return valid_albums
+
+        except Exception as e:
+            self.log(f"Failed to fetch albums: {str(e)}")
+            raise
+
+    def _validate_album(self, album):
+        if not isinstance(album, dict):
+            return "Invalid format"
+
+        required_fields = ['id', 'albumName', 'albumThumbnailAssetId', 'assetCount']
+        for field in required_fields:
+            if field not in album:
+                return f"Missing {field}"
+
+        try:
+            if 'createdAt' in album:
+                datetime.fromisoformat(album['createdAt'].replace('Z', '+00:00'))
+            if 'updatedAt' in album:
+                datetime.fromisoformat(album['updatedAt'].replace('Z', '+00:00'))
+        except (ValueError, TypeError):
+            return "Invalid date format"
+
+        return None

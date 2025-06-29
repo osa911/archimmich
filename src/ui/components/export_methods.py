@@ -2,7 +2,7 @@
 Additional methods for ExportComponent - separated to manage file size
 This file contains the business logic methods for the export component
 """
-from PyQt5.QtWidgets import QApplication, QCheckBox, QFileDialog
+from PyQt5.QtWidgets import QCheckBox, QFileDialog, QWidget, QVBoxLayout, QListWidget, QPushButton, QHBoxLayout, QLabel, QListWidgetItem
 from PyQt5.QtCore import Qt
 
 
@@ -218,3 +218,83 @@ class ExportMethods:
     def validate_inputs(self):
         """Legacy method - redirects to validate_export_inputs for backward compatibility."""
         return self.validate_export_inputs()
+
+    def setup_album_tab(self):
+        album_tab = QWidget()
+        album_layout = QVBoxLayout()
+
+        # Album list widget
+        self.album_list = QListWidget()
+        self.album_list.setSelectionMode(QListWidget.MultiSelection)
+        album_layout.addWidget(self.album_list)
+
+        # Refresh button
+        fetch_button = QPushButton("Fetch Albums")
+        fetch_button.clicked.connect(self.fetch_albums)
+        album_layout.addWidget(fetch_button)
+
+        album_tab.setLayout(album_layout)
+        return album_tab
+
+    def fetch_albums(self):
+        self.album_list.clear()
+        if not self.export_manager:
+            return
+
+        try:
+            albums = self.export_manager.get_albums()
+            for album in albums:
+                item = QListWidgetItem()
+                widget = self.create_album_item_widget(album)
+                item.setSizeHint(widget.sizeHint())
+                self.album_list.addItem(item)
+                self.album_list.setItemWidget(item, widget)
+        except Exception as e:
+            if self.logger:
+                self.logger.append(f"Failed to fetch albums: {str(e)}")
+
+    def create_album_item_widget(self, album):
+        widget = QWidget()
+        layout = QHBoxLayout()
+
+        # Checkbox
+        checkbox = QCheckBox()
+        checkbox.setChecked(False)
+        layout.addWidget(checkbox)
+
+        # Album info
+        info_layout = QVBoxLayout()
+
+        # Album name and count
+        name_label = QLabel(f"{album['albumName']} ({album['assetCount']} assets)")
+        name_label.setStyleSheet("font-weight: bold;")
+        info_layout.addWidget(name_label)
+
+        # Album dates if available
+        if 'startDate' in album and 'endDate' in album:
+            date_label = QLabel(f"From {album['startDate'][:10]} to {album['endDate'][:10]}")
+            date_label.setStyleSheet("color: gray;")
+            info_layout.addWidget(date_label)
+
+        layout.addLayout(info_layout)
+        layout.addStretch()
+
+        # Asset count
+        count_label = QLabel(f"{album['assetCount']}")
+        count_label.setStyleSheet("color: gray;")
+        layout.addWidget(count_label)
+
+        widget.setLayout(layout)
+        return widget
+
+    def get_selected_albums(self):
+        selected_albums = []
+        for i in range(self.album_list.count()):
+            item = self.album_list.item(i)
+            widget = self.album_list.itemWidget(item)
+            checkbox = widget.layout().itemAt(0).widget()  # Get the checkbox
+            if checkbox.isChecked():
+                album_name = widget.layout().itemAt(1).itemAt(0).widget().text()  # Get the album name label
+                album_name = album_name.split(" (")[0]  # Remove the asset count from the name
+                selected_albums.append(album_name)
+        return selected_albums

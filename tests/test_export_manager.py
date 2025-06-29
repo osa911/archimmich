@@ -492,3 +492,68 @@ def test_download_archive_no_ids(export_manager, mock_api_manager, mock_logger, 
     assert result is None
     mock_logger.append.assert_called_with("No assets or album provided for download")
     mock_api_manager.post.assert_not_called()
+
+
+def test_get_albums(export_manager, mock_api_manager):
+    """Test fetching albums list."""
+    mock_albums = [
+        {
+            "id": "album1",
+            "albumName": "Test Album 1",
+            "albumThumbnailAssetId": "thumb1",
+            "assetCount": 10,
+            "createdAt": "2025-06-12T11:56:28.017Z",
+            "updatedAt": "2025-06-12T12:36:17.928Z"
+        },
+        {
+            "id": "album2",
+            "albumName": "Test Album 2",
+            "albumThumbnailAssetId": "thumb2",
+            "assetCount": 20,
+            "createdAt": "2025-06-12T11:56:28.017Z",
+            "updatedAt": "2025-06-12T12:36:17.928Z"
+        }
+    ]
+    mock_api_manager.get.return_value = mock_albums
+
+    result = export_manager.get_albums()
+
+    mock_api_manager.get.assert_called_once_with("/albums", expected_type=list)
+    assert len(result) == 2
+    assert result[0]["id"] == "album1"
+    assert result[1]["id"] == "album2"
+
+
+def test_get_albums_validation(export_manager, mock_api_manager, mock_logger):
+    """Test album validation with invalid data."""
+    mock_albums = [
+        {
+            "id": "album1",  # Missing required fields
+            "albumName": "Test Album 1"
+        },
+        {
+            "id": "album2",
+            "albumName": "Test Album 2",
+            "albumThumbnailAssetId": "thumb2",
+            "assetCount": 20,
+            "createdAt": "2025-06-12T11:56:28.017Z",
+            "updatedAt": "2025-06-12T12:36:17.928Z"
+        }
+    ]
+    mock_api_manager.get.return_value = mock_albums
+
+    result = export_manager.get_albums()
+
+    assert len(result) == 1  # Only one valid album
+    assert result[0]["id"] == "album2"
+    mock_logger.append.assert_any_call("Filtered 1 invalid buckets: 1 Missing albumThumbnailAssetId")
+
+
+def test_get_albums_empty(export_manager, mock_api_manager):
+    """Test fetching empty albums list."""
+    mock_api_manager.get.return_value = []
+
+    result = export_manager.get_albums()
+
+    assert result == []
+    mock_api_manager.get.assert_called_once_with("/albums", expected_type=list)
