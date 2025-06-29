@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QLabel, QWidget, QSpacerItem,
-    QSizePolicy, QHBoxLayout, QPushButton, QFrame
+    QSizePolicy, QHBoxLayout, QPushButton, QFrame, QSplitter, QWIDGETSIZE_MAX
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QGuiApplication, QPixmap, QIcon
@@ -94,16 +94,26 @@ class MainWindow(QMainWindow):
         self.export_component = ExportComponent(self.login_manager, logger=None)  # Logger will be set later
         self.export_component.export_finished.connect(self.on_export_finished)
         self.export_component.hide()
-        self.layout.addWidget(self.export_component)
 
-        # Add spacer
-        spacer = QSpacerItem(20, 0, QSizePolicy.Minimum, QSizePolicy.Expanding)
-        self.layout.addItem(spacer)
+        # Create splitter for export component and logs
+        self.main_splitter = QSplitter(Qt.Vertical)
+        self.main_splitter.addWidget(self.export_component)
 
         # Logs section
         self.logs = AutoScrollTextEdit()
-        self.logs.setMinimumHeight(200)
-        self.layout.addWidget(self.logs)
+        self.logs.setMinimumHeight(100)
+        self.logs.setMaximumHeight(150)
+        self.logs_container = QWidget()
+        logs_layout = QVBoxLayout(self.logs_container)
+        self.logs_container.setMaximumHeight(150)
+        logs_layout.setContentsMargins(0, 5, 0, 0)
+        logs_layout.addWidget(self.logs)
+        self.main_splitter.addWidget(self.logs_container)
+
+        # Set initial sizes - give more space to export component
+        self.main_splitter.setSizes([600, 100])
+
+        self.layout.addWidget(self.main_splitter)
 
     def setup_header(self):
         """Setup the header bar with logo on left and user info on right."""
@@ -251,6 +261,7 @@ class MainWindow(QMainWindow):
         # Display avatar and show user info container (includes logout button)
         if avatar_fetcher:
             display_avatar(self, avatar_fetcher)
+        # show avatar even if no avatar is found. (it will be a placeholder)
         self.avatar_label.show()
         self.logout_button.show()
         self.user_info_container.show()
@@ -263,7 +274,11 @@ class MainWindow(QMainWindow):
         self.export_component.show()
         self.export_component.show_export_ui()
 
-                # Set logger for components
+        # Reset logs maximum height
+        self.logs.setMaximumHeight(QWIDGETSIZE_MAX)
+        self.logs_container.setMaximumHeight(QWIDGETSIZE_MAX)
+
+        # Set logger for components
         self.login_component.logger = self.logger
         self.export_component.logger = self.logger
 
@@ -312,6 +327,10 @@ class MainWindow(QMainWindow):
 
         # Hide the entire header when logged out
         self.header_widget.hide()
+
+        # Reset logs maximum height
+        self.logs.setMaximumHeight(150)
+        self.logs_container.setMaximumHeight(150)
 
         self.log("You have been logged out.")
 
