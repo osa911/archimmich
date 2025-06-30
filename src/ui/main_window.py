@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QVBoxLayout, QLabel, QWidget, QSpacerItem,
-    QSizePolicy, QHBoxLayout, QPushButton, QFrame, QSplitter, QWIDGETSIZE_MAX
+    QMainWindow, QVBoxLayout, QLabel, QWidget,
+    QHBoxLayout, QPushButton, QSplitter, QWIDGETSIZE_MAX
 )
 from PyQt5.QtCore import Qt
 from PyQt5.QtGui import QGuiApplication, QPixmap, QIcon
@@ -276,7 +276,6 @@ class MainWindow(QMainWindow):
         # Hide login container and show export component
         self.login_container.hide()
         self.export_component.show()
-        self.export_component.show_export_ui()
 
         # Reset logs maximum height
         self.logs.setMaximumHeight(QWIDGETSIZE_MAX)
@@ -302,9 +301,8 @@ class MainWindow(QMainWindow):
         # Stop any ongoing export process before logout
         if hasattr(self.export_component, 'stop_requested') and not self.export_component.stop_requested:
             # Check if export is currently running (stop button is visible)
-            if hasattr(self.export_component, 'stop_button') and self.export_component.stop_button.isVisible():
-                self.log("Stopping ongoing export process...")
-                self.export_component.stop_export()
+            self.log("Stopping ongoing export process...")
+            self.export_component.stop_export()
 
         self.login_manager.logout()
 

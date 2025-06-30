@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QCheckBox,
-    QComboBox, QPushButton, QFileDialog, QProgressBar, QScrollArea, QFrame,
+    QPushButton, QProgressBar, QScrollArea,
     QApplication, QRadioButton, QButtonGroup, QTabWidget
 )
 from PyQt5.QtCore import Qt, pyqtSignal
@@ -25,28 +25,26 @@ class ExportComponent(QWidget, ExportMethods):
         self.logger = logger
         self.stop_requested = False
         self.buckets = []
-        self.output_dir = ""
         self.export_manager = None
         # Resume functionality state
         self.paused_export_state = None
         self.setup_ui()
 
     def setup_ui(self):
-        """Setup the two-column export component UI."""
         # Main horizontal layout
         self.main_layout = QHBoxLayout(self)
-        self.main_layout.setContentsMargins(10, 0, 10, 0)  # Remove main layout margins
+        self.main_layout.setContentsMargins(15, 0, 15, 5)  # Remove main layout margins
         self.main_layout.setSpacing(0)  # No spacing, divider will handle separation
         self.setup_tab_widget(self.main_layout)
 
-    def setup_tab_widget(self, layout: QVBoxLayout | QHBoxLayout):
+    def setup_tab_widget(self, container_layout: QVBoxLayout | QHBoxLayout):
         """Setup the tab widget."""
         self.tab_widget = QTabWidget()
         timeline_icon = QIcon(get_resource_path("src/resources/icons/timeline-icon.svg"))
         albums_icon = QIcon(get_resource_path("src/resources/icons/albums-icon.svg"))
         self.tab_widget.addTab(self.setup_timeline_tab(), timeline_icon, "Timeline")
         self.tab_widget.addTab(self.setup_albums_tab(), albums_icon, "Albums")
-        layout.addWidget(self.tab_widget)
+        container_layout.addWidget(self.tab_widget)
 
     def setup_timeline_tab(self):
         """Setup the timeline tab."""
@@ -55,7 +53,7 @@ class ExportComponent(QWidget, ExportMethods):
         timeline_layout.setContentsMargins(10, 5, 10, 10)
         timeline_layout.setSpacing(10)
         # Create left sidebar (30% width)
-        self.setup_sidebar(timeline_layout)
+        self.setup_timeline_sidebar(timeline_layout)
 
         # Add vertical divider with margins
         divider_container = VerticalDivider(
@@ -65,10 +63,10 @@ class ExportComponent(QWidget, ExportMethods):
         timeline_layout.addWidget(divider_container)
 
         # Create right main area (70% width)
-        self.setup_main_area(timeline_layout)
+        self.setup_timeline_main_area(timeline_layout)
         return timeline_tab
 
-    def setup_sidebar(self, layout: QVBoxLayout | QHBoxLayout):
+    def setup_timeline_sidebar(self, container_layout: QVBoxLayout | QHBoxLayout):
         """Setup the left sidebar with controls."""
         sidebar = QWidget()
         sidebar.setMaximumWidth(285)  # Fixed max width for sidebar
@@ -79,7 +77,7 @@ class ExportComponent(QWidget, ExportMethods):
         self.sidebar_layout.setSpacing(10)
 
         # Fetch button at the top
-        self.init_fetch_button(self.sidebar_layout)
+        self.init_fetch_button(self.sidebar_layout, "Fetch Buckets", self.fetch_buckets)
 
         # Add horizontal divider after fetch button
         self.sidebar_layout.addWidget(HorizontalDivider())
@@ -91,28 +89,29 @@ class ExportComponent(QWidget, ExportMethods):
         self.sidebar_layout.addStretch()
 
         # Add sidebar to main layout
-        layout.addWidget(sidebar)
+        container_layout.addWidget(sidebar)
 
-    def setup_main_area(self, layout: QVBoxLayout | QHBoxLayout):
+    def setup_timeline_main_area(self, container_layout: QVBoxLayout | QHBoxLayout):
         """Setup the right main area for content."""
-        self.main_area = QWidget()
-        self.main_area_layout = QVBoxLayout(self.main_area)
-        self.main_area_layout.setContentsMargins(0, 0, 0, 0)  # Small internal margins
+        self.timeline_main_area = QWidget()
+        self.timeline_main_area.setObjectName("timeline_main_area")
+        self.main_area_layout = QVBoxLayout(self.timeline_main_area)
+        self.main_area_layout.setContentsMargins(0, 0, 0, 0)
 
         # Bucket list section
         self.init_bucket_list()
 
         # Control buttons section (output directory and export)
-        self.init_control_buttons()
+        self.init_control_buttons(self.main_area_layout, self.timeline_main_area)
 
         # Progress bars
-        self.init_progress_bars()
+        self.init_progress_bars(self.main_area_layout, self.timeline_main_area)
 
         # Archives display
-        self.init_archives_display()
+        self.init_archives_display(self.main_area_layout, self.timeline_main_area)
 
         # Add main area to layout
-        layout.addWidget(self.main_area)
+        container_layout.addWidget(self.timeline_main_area)
 
     def init_config_section(self, layout: QVBoxLayout | QHBoxLayout):
         """Initialize configuration options in sidebar."""
@@ -144,12 +143,13 @@ class ExportComponent(QWidget, ExportMethods):
         self.is_archived_check = QCheckBox("Is Archived?")
         left_layout.addWidget(self.is_archived_check)
 
-        self.with_partners_check = QCheckBox("With Partners?")
-        left_layout.addWidget(self.with_partners_check)
-
         self.is_favorite_check = QCheckBox("Is Favorite?")
         self.is_favorite_check.setChecked(False)
         left_layout.addWidget(self.is_favorite_check)
+
+        self.is_trashed_check = QCheckBox("Is Trashed?")
+        self.is_trashed_check.setChecked(False)
+        left_layout.addWidget(self.is_trashed_check)
 
         # Right column
         right_column = QWidget()
@@ -159,9 +159,8 @@ class ExportComponent(QWidget, ExportMethods):
         self.with_stacked_check = QCheckBox("With Stacked?")
         right_layout.addWidget(self.with_stacked_check)
 
-        self.is_trashed_check = QCheckBox("Is Trashed?")
-        self.is_trashed_check.setChecked(False)
-        right_layout.addWidget(self.is_trashed_check)
+        self.with_partners_check = QCheckBox("With Partners?")
+        right_layout.addWidget(self.with_partners_check)
 
         # Add empty label for alignment
         right_layout.addWidget(QLabel(""))  # Spacer to balance columns
@@ -256,19 +255,13 @@ class ExportComponent(QWidget, ExportMethods):
         albums_layout.setSpacing(10)
 
         # Fetch albums button
-        fetch_layout = QHBoxLayout()
-        self.fetch_albums_button = QPushButton("Fetch Albums")
-        self.fetch_albums_button.setIcon(QIcon(get_resource_path("src/resources/icons/download-icon.svg")))
-        self.fetch_albums_button.clicked.connect(self.fetch_albums)
-        fetch_layout.addWidget(self.fetch_albums_button)
-        fetch_layout.addStretch()
-        albums_layout.addLayout(fetch_layout)
-        albums_layout.addStretch()
+        self.init_fetch_button(albums_layout, "Fetch Albums", self.fetch_albums)
 
         # Albums list
         self.albums_scroll_area = QScrollArea()
         self.albums_scroll_area.setWidgetResizable(True)
         self.albums_scroll_area.hide()
+
         albums_list_widget = QWidget()
         self.albums_list_layout = QVBoxLayout(albums_list_widget)
 
@@ -279,7 +272,22 @@ class ExportComponent(QWidget, ExportMethods):
         self.albums_scroll_area.setWidget(albums_list_widget)
         albums_layout.addWidget(self.albums_scroll_area)
 
-        albums_tab.setLayout(albums_layout)
+        # Bottom area
+        self.albums_main_area = QWidget()
+        self.albums_main_area.setObjectName("albums_main_area")
+        self.albums_main_area_layout = QVBoxLayout(self.albums_main_area)
+        self.albums_main_area_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Control buttons section (output directory and export)
+        self.init_control_buttons(self.albums_main_area_layout, self.albums_main_area)
+
+        # Progress bars
+        self.init_progress_bars(self.albums_main_area_layout, self.albums_main_area)
+
+        # Archives display
+        self.init_archives_display(self.albums_main_area_layout, self.albums_main_area)
+
+        albums_layout.addWidget(self.albums_main_area)
         return albums_tab
 
     def clear_albums_list(self):
@@ -298,8 +306,7 @@ class ExportComponent(QWidget, ExportMethods):
 
         # Fetch albums
         try:
-            api_manager = self.login_manager.api_manager
-            self.export_manager = ExportManager(api_manager, self.logger, "", self.stop_flag)
+            self.export_manager = ExportManager(self.login_manager, self.logger, "", self.stop_flag)
             self.albums = self.export_manager.get_albums()
 
             # Add albums to the list or show no albums message
@@ -308,6 +315,14 @@ class ExportComponent(QWidget, ExportMethods):
                     checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
                     checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
                     self.albums_list_layout.addWidget(checkbox)
+
+                self.select_all_albums_checkbox.setText(f"Select All ({len(self.albums)})")
+                self.albums_main_area.output_dir_label.show()
+                self.albums_main_area.output_dir_button.show()
+                self.albums_main_area.export_button.show()
+                self.albums_main_area.export_button.show()
+                self.albums_main_area.archives_display.show()
+
             else:
                 no_albums_label = QLabel("No albums found")
                 no_albums_label.setStyleSheet("color: gray; padding: 10px;")
@@ -414,16 +429,16 @@ class ExportComponent(QWidget, ExportMethods):
         bucket_header_layout.addStretch()
 
         # Order section on the right
-        self.order_label = QLabel("Order by:")
-        self.order_label.hide()
-        bucket_header_layout.addWidget(self.order_label)
+        self.timeline_main_area.order_label = QLabel("Order by:")
+        self.timeline_main_area.order_label.hide()
+        bucket_header_layout.addWidget(self.timeline_main_area.order_label)
 
-        self.order_button = QPushButton("↓") # Start with descending
-        self.order_button.setMaximumWidth(30)
-        self.order_button.setToolTip("Toggle sort order (↓ descending/newest first, ↑ ascending/oldest first)")
-        self.order_button.clicked.connect(self.toggle_order)
-        self.order_button.hide()
-        bucket_header_layout.addWidget(self.order_button)
+        self.timeline_main_area.order_button = QPushButton("↓") # Start with descending
+        self.timeline_main_area.order_button.setMaximumWidth(30)
+        self.timeline_main_area.order_button.setToolTip("Toggle sort order (↓ descending/newest first, ↑ ascending/oldest first)")
+        self.timeline_main_area.order_button.clicked.connect(self.toggle_timeline_order)
+        self.timeline_main_area.order_button.hide()
+        bucket_header_layout.addWidget(self.timeline_main_area.order_button)
 
         self.main_area_layout.addLayout(bucket_header_layout)
 
@@ -441,68 +456,66 @@ class ExportComponent(QWidget, ExportMethods):
         self.bucket_scroll_area.hide()
         self.main_area_layout.addWidget(self.bucket_scroll_area)
 
-    def init_fetch_button(self, layout: QVBoxLayout | QHBoxLayout):
+    def init_fetch_button(self, container_layout: QVBoxLayout | QHBoxLayout, title: str, callback: callable):
         """Initialize fetch button at the top of main area."""
         fetch_layout = QHBoxLayout()
-        self.fetch_button = QPushButton("Fetch Buckets")
-        self.fetch_button.setIcon(QIcon(get_resource_path("src/resources/icons/download-icon.svg")))
-        self.fetch_button.clicked.connect(self.fetch_buckets)
-        fetch_layout.addWidget(self.fetch_button)
+        fetch_button = QPushButton(title)
+        fetch_button.setIcon(QIcon(get_resource_path("src/resources/icons/download-icon.svg")))
+        fetch_button.clicked.connect(callback)
+        fetch_layout.addWidget(fetch_button)
         fetch_layout.addStretch()  # Push to left
-        layout.addLayout(fetch_layout)
+        container_layout.addLayout(fetch_layout)
 
-    def init_control_buttons(self):
+    def init_control_buttons(self, container_layout: QVBoxLayout | QHBoxLayout, main_area: QWidget):
         """Initialize output directory and export controls in main area."""
-        # Add some spacing
-        self.main_area_layout.addWidget(QLabel("")) # Spacer
-
-        self.output_dir_label = QLabel("<span><span style='color: red;'>*</span> Select output directory:</span>")
-        self.output_dir_label.hide()
-        self.main_area_layout.addWidget(self.output_dir_label)
+        main_area.output_dir = ""
+        main_area.output_dir_label = QLabel("<span><span style='color: red;'>*</span> Select output directory:</span>")
+        main_area.output_dir_label.hide()
+        container_layout.addWidget(main_area.output_dir_label)
 
         # Output directory button row
         output_layout = QHBoxLayout()
-        self.output_dir_button = QPushButton("Choose Directory")
-        self.output_dir_button.setIcon(QIcon(get_resource_path("src/resources/icons/folder-icon.svg")))
-        self.output_dir_button.clicked.connect(self.select_output_dir)
-        self.output_dir_button.hide()
-        output_layout.addWidget(self.output_dir_button)
+        main_area.output_dir_button = QPushButton("Choose Directory")
+        main_area.output_dir_button.setIcon(QIcon(get_resource_path("src/resources/icons/folder-icon.svg")))
+        main_area.output_dir_button.clicked.connect(lambda: self.select_output_dir(main_area))
+        main_area.output_dir_button.hide()
+        output_layout.addWidget(main_area.output_dir_button)
         output_layout.addStretch() # Push to left
-        self.main_area_layout.addLayout(output_layout)
+        container_layout.addLayout(output_layout)
 
         # Export buttons row (no title)
         export_layout = QHBoxLayout()
 
-        self.export_button = QPushButton("Export")
-        self.export_button.setIcon(QIcon(get_resource_path("src/resources/icons/archive-icon.svg")))
-        self.export_button.clicked.connect(self.start_export)
-        self.export_button.hide()
-        export_layout.addWidget(self.export_button)
+        main_area.export_button = QPushButton("Export")
+        main_area.export_button.setIcon(QIcon(get_resource_path("src/resources/icons/archive-icon.svg")))
+        main_area.export_button.clicked.connect(lambda: self.start_export(main_area))
+        main_area.export_button.hide()
+        export_layout.addWidget(main_area.export_button)
 
-        self.stop_button = QPushButton("Stop Export")
-        self.stop_button.setStyleSheet("background-color: '#f44336'; color: white;")
-        self.stop_button.clicked.connect(self.stop_export)
-        self.stop_button.hide()
-        export_layout.addWidget(self.stop_button)
+        main_area.stop_button = QPushButton("Stop Export")
+        main_area.stop_button.setStyleSheet("background-color: '#f44336'; color: white;")
+        main_area.stop_button.clicked.connect(lambda: self.stop_export(main_area))
+        main_area.stop_button.hide()
+        export_layout.addWidget(main_area.stop_button)
 
-        self.resume_button = QPushButton("Resume Export")
-        self.resume_button.setStyleSheet("background-color: '#4CAF50'; color: white;")
-        self.resume_button.clicked.connect(self.resume_export)
-        self.resume_button.hide()
-        export_layout.addWidget(self.resume_button)
+        main_area.resume_button = QPushButton("Resume Export")
+        main_area.resume_button.setStyleSheet("background-color: '#4CAF50'; color: white;")
+        main_area.resume_button.clicked.connect(lambda: self.resume_export(main_area))
+        main_area.resume_button.hide()
+        export_layout.addWidget(main_area.resume_button)
 
         # Add stretch to push buttons to the left
         export_layout.addStretch()
-        self.main_area_layout.addLayout(export_layout)
+        container_layout.addLayout(export_layout)
 
-    def init_progress_bars(self):
+    def init_progress_bars(self, container_layout: QVBoxLayout | QHBoxLayout, main_area: QWidget):
         """Initialize progress bars in main area."""
-        self.current_download_progress_bar = QProgressBar()
-        self.current_download_progress_bar.setRange(0, 100)
-        self.current_download_progress_bar.setFormat("Current Download: 0%")
-        self.current_download_progress_bar.setValue(0)
-        self.current_download_progress_bar.setTextVisible(True)
-        self.current_download_progress_bar.setStyleSheet("""
+        main_area.current_download_progress_bar = QProgressBar()
+        main_area.current_download_progress_bar.setRange(0, 100)
+        main_area.current_download_progress_bar.setFormat("Current Download: 0%")
+        main_area.current_download_progress_bar.setValue(0)
+        main_area.current_download_progress_bar.setTextVisible(True)
+        main_area.current_download_progress_bar.setStyleSheet("""
             QProgressBar {
                 text-align: center;
                 color: white;
@@ -513,34 +526,34 @@ class ExportComponent(QWidget, ExportMethods):
                 background-color: #1f20ff;
             }
         """)
-        self.current_download_progress_bar.hide()
-        self.main_area_layout.addWidget(self.current_download_progress_bar)
+        main_area.current_download_progress_bar.hide()
+        container_layout.addWidget(main_area.current_download_progress_bar)
 
-        self.progress_bar = QProgressBar()
-        self.progress_bar.hide()
-        self.main_area_layout.addWidget(self.progress_bar)
+        main_area.progress_bar = QProgressBar()
+        main_area.progress_bar.hide()
+        container_layout.addWidget(main_area.progress_bar)
 
-    def init_archives_display(self):
+    def init_archives_display(self, container_layout: QVBoxLayout | QHBoxLayout, main_area: QWidget):
         """Initialize archives display section in main area."""
-        self.archives_section = QWidget()
-        self.archives_layout = QHBoxLayout(self.archives_section)
+        main_area.archives_section = QWidget()
+        archives_layout = QHBoxLayout(main_area.archives_section)
 
-        self.archives_label = QLabel("Downloaded Archives:")
-        self.archives_label.setStyleSheet("font-weight: bold;")
-        self.archives_layout.addWidget(self.archives_label)
+        archives_label = QLabel("Downloaded Archives:")
+        archives_label.setStyleSheet("font-weight: bold;")
+        archives_layout.addWidget(archives_label)
 
-        self.open_folder_button = QPushButton("Open Folder")
-        self.open_folder_button.clicked.connect(self.open_output_folder)
-        self.archives_layout.addWidget(self.open_folder_button)
+        open_folder_button = QPushButton("Open Folder")
+        open_folder_button.clicked.connect(lambda: self.open_output_folder(main_area))
+        archives_layout.addWidget(open_folder_button)
 
-        self.archives_section.hide()
-        self.main_area_layout.addWidget(self.archives_section)
+        main_area.archives_section.hide()
+        container_layout.addWidget(main_area.archives_section)
 
-        self.archives_display = AutoScrollTextEdit()
-        self.archives_display.setPlaceholderText("Downloaded archives will appear here...")
-        self.archives_display.setMaximumHeight(150)  # Limit height
-        self.archives_display.hide()  # Initially hidden
-        self.main_area_layout.addWidget(self.archives_display)
+        main_area.archives_display = AutoScrollTextEdit()
+        main_area.archives_display.setPlaceholderText("Downloaded archives will appear here...")
+        main_area.archives_display.setMaximumHeight(75)  # Limit height
+        main_area.archives_display.hide()  # Initially hidden
+        container_layout.addWidget(main_area.archives_display)
 
     def fetch_buckets(self):
         """Fetch buckets from the API."""
@@ -551,12 +564,11 @@ class ExportComponent(QWidget, ExportMethods):
             if self.logger:
                 self.logger.append("Fetching buckets...")
             inputs = self.get_user_input_values()
-            api_manager = self.login_manager.api_manager
             # Don't require output_dir for fetching buckets
-            self.export_manager = ExportManager(api_manager, self.logger, "", self.stop_flag)
+            self.export_manager = ExportManager(self.login_manager, self.logger, "", self.stop_flag)
 
             # Check if server supports Range headers and hide resume button if not
-            self.check_and_hide_resume_button_if_needed()
+            self.check_and_hide_resume_button_if_needed(self.timeline_main_area)
 
             # Clear existing buckets before fetching new ones
             self.buckets = []
@@ -579,16 +591,16 @@ class ExportComponent(QWidget, ExportMethods):
                 self.clear_bucket_list()
                 self.bucket_scroll_area.hide()
                 self.bucket_list_label.hide()
-                self.order_label.hide()
-                self.order_button.hide()
+                self.timeline_main_area.order_label.hide()
+                self.timeline_main_area.order_button.hide()
 
                 # Hide output directory and export sections
-                self.output_dir_label.hide()
-                self.output_dir_button.hide()
-                self.export_button.hide()
+                self.timeline_main_area.output_dir_label.hide()
+                self.timeline_main_area.output_dir_button.hide()
+                self.timeline_main_area.export_button.hide()
 
                 # Hide archives display
-                self.archives_display.hide()
+                self.timeline_main_area.archives_display.hide()
                 return
 
             if self.logger:
@@ -605,16 +617,16 @@ class ExportComponent(QWidget, ExportMethods):
             self.bucket_list_label.show()
 
             # Show order controls
-            self.order_label.show()
-            self.order_button.show()
+            self.timeline_main_area.order_label.show()
+            self.timeline_main_area.order_button.show()
 
             # Show output directory and export sections
-            self.output_dir_label.show()
-            self.output_dir_button.show()
-            self.export_button.show()
+            self.timeline_main_area.output_dir_label.show()
+            self.timeline_main_area.output_dir_button.show()
+            self.timeline_main_area.export_button.show()
 
             # Show archives display area
-            self.archives_display.show()
+            self.timeline_main_area.archives_display.show()
 
         except Exception as e:
             error_msg = str(e).lower()
@@ -627,21 +639,21 @@ class ExportComponent(QWidget, ExportMethods):
             self.bucket_list_label.hide()
 
             # Hide order controls
-            self.order_label.hide()
-            self.order_button.hide()
+            self.timeline_main_area.order_label.hide()
+            self.timeline_main_area.order_button.hide()
 
             # Hide output directory and export sections
-            self.output_dir_label.hide()
-            self.output_dir_button.hide()
-            self.export_button.hide()
+            self.timeline_main_area.output_dir_label.hide()
+            self.timeline_main_area.output_dir_button.hide()
+            self.timeline_main_area.export_button.hide()
 
             # Hide archives display
-            self.archives_display.hide()
+            self.timeline_main_area.archives_display.hide()
 
-    def start_export(self):
+    def start_export(self, main_area: QWidget):
         """Start the export process."""
         # Validate export inputs (including output directory)
-        if not self.validate_export_inputs():
+        if not self.validate_export_inputs(main_area):
             return
 
         if self.logger:
@@ -649,44 +661,57 @@ class ExportComponent(QWidget, ExportMethods):
         self.stop_requested = False
         # Clear any existing paused state when starting fresh
         self.paused_export_state = None
-        self.export_button.hide()
-        self.resume_button.hide()  # Hide resume button when starting new export
-        self.stop_button.show()
+        main_area.resume_button.hide()  # Hide resume button when starting new export
 
-        # Hide output directory button during export to prevent changes
-        self.output_dir_button.hide()
+        selected_items = self.get_selected_albums() if main_area.objectName() == "albums_main_area" else self.get_selected_buckets()
 
-        selected_buckets = self.get_selected_buckets()
-        if not selected_buckets:
+        if not selected_items:
             if self.logger:
-                self.logger.append("Error: No buckets selected for export.")
-            self.stop_button.hide()
-            self.export_button.show()
+                self.logger.append("Error: No items selected for export.")
             return
 
+        main_area.export_button.hide()
+        main_area.stop_button.show()
+
+        # Hide output directory button during export to prevent changes
+        main_area.output_dir_button.hide()
+
         # Update export manager with correct output directory
-        api_manager = self.login_manager.api_manager
-        self.export_manager = ExportManager(api_manager, self.logger, self.output_dir, self.stop_flag)
+        self.export_manager = ExportManager(self.login_manager, self.logger, main_area.output_dir, self.stop_flag)
 
         # Check if server supports Range headers and hide resume button if not
-        self.check_and_hide_resume_button_if_needed()
+        self.check_and_hide_resume_button_if_needed(main_area)
 
-        self.setup_progress_bar(len(selected_buckets))
+        self.setup_progress_bar(main_area, len(selected_items))
         if self.logger:
-            self.logger.append(f"Total buckets to process: {len(selected_buckets)}")
+            self.logger.append(f"Total items to process: {len(selected_items)}")
 
+        if main_area.objectName() == "albums_main_area":
+            self.export_albums(main_area, selected_items)
+        else:
+            self.export_buckets(main_area, selected_items)
+
+        if self.login_manager.is_logged_in():
+            self.finalize_export(main_area)
+
+    def export_albums(self, main_area: QWidget, selected_items):
+        for i, album in enumerate(selected_items, start=1):
+            result = self.download_and_save_archive(main_area,album["assets"], album["albumName"], self.get_archive_size_in_bytes(), album_id=album["id"])
+            if result == "completed":
+                self.update_progress_bar(main_area, i, len(selected_items))
+                QApplication.processEvents()
+
+    def export_buckets(self, main_area: QWidget, selected_buckets):
         inputs = self.get_user_input_values()
         archive_size_bytes = self.get_archive_size_in_bytes()
         download_option = self.get_download_option()
 
         if download_option.startswith("Per"):
-            self.process_buckets_individually(selected_buckets, inputs, archive_size_bytes)
+            self.process_buckets_individually(main_area, selected_buckets, inputs, archive_size_bytes)
         elif download_option == "Single Archive":
-            self.process_all_buckets_combined(selected_buckets, inputs, archive_size_bytes)
+            self.process_all_buckets_combined(main_area, selected_buckets, inputs, archive_size_bytes)
 
-        self.finalize_export()
-
-    def process_buckets_individually(self, selected_buckets, inputs, archive_size_bytes):
+    def process_buckets_individually(self, main_area: QWidget, selected_buckets, inputs, archive_size_bytes):
         """Process each bucket individually."""
         # Check for existing archives before starting
         bucket_names = [self.export_manager.format_time_bucket(tb) for tb in selected_buckets]
@@ -701,7 +726,7 @@ class ExportComponent(QWidget, ExportMethods):
                 self.save_export_state(selected_buckets, inputs, archive_size_bytes, "Per Bucket", i - 1)
                 if self.logger:
                     self.logger.append("Export paused by user.")
-                self.show_resume_button()
+                self.show_resume_button(main_area)
                 return
 
             bucket_name = self.export_manager.format_time_bucket(time_bucket)
@@ -713,27 +738,27 @@ class ExportComponent(QWidget, ExportMethods):
                 if not asset_ids:
                     if self.logger:
                         self.logger.append(f"No assets found for bucket: {bucket_name}")
-                    self.update_progress_bar(i, len(selected_buckets))
+                    self.update_progress_bar(main_area, i, len(selected_buckets))
                     continue
 
-                download_result = self.download_and_save_archive(asset_ids, bucket_name, archive_size_bytes)
+                download_result = self.download_and_save_archive(main_area,asset_ids, bucket_name, archive_size_bytes)
                 if download_result == "paused":
                     # Save state and show resume button
                     self.save_export_state(selected_buckets, inputs, archive_size_bytes, "Per Bucket", i - 1)
-                    self.show_resume_button()
+                    self.show_resume_button(main_area)
                     return
 
             except Exception as e:
                 if self.logger:
                     self.logger.append(f"Error processing bucket {bucket_name}: {str(e)}")
 
-            self.update_progress_bar(i, len(selected_buckets))
+            self.update_progress_bar(main_area, i, len(selected_buckets))
             QApplication.processEvents()
 
         # Clear paused state on successful completion
         self.paused_export_state = None
 
-    def process_all_buckets_combined(self, selected_buckets, inputs, archive_size_bytes):
+    def process_all_buckets_combined(self, main_area: QWidget, selected_buckets, inputs, archive_size_bytes):
         """Process all buckets into a single combined archive."""
         # Check if combined archive already exists
         existing_files, missing_files = self.export_manager.check_existing_archives(["Combined_Archive"])
@@ -748,7 +773,7 @@ class ExportComponent(QWidget, ExportMethods):
                     self.save_export_state(selected_buckets, inputs, archive_size_bytes, "Single Archive", 0)
                     if self.logger:
                         self.logger.append("Export paused by user.")
-                    self.show_resume_button()
+                    self.show_resume_button(main_area)
                     return
 
                 asset_ids = self.fetch_assets_for_bucket(time_bucket, inputs)
@@ -759,11 +784,11 @@ class ExportComponent(QWidget, ExportMethods):
                     self.logger.append("No assets found in selected buckets.")
                 return
 
-            download_result = self.download_and_save_archive(all_asset_ids, "Combined_Archive", archive_size_bytes)
+            download_result = self.download_and_save_archive(main_area, all_asset_ids, "Combined_Archive", archive_size_bytes)
             if download_result == "paused":
                 # Save state and show resume button
                 self.save_export_state(selected_buckets, inputs, archive_size_bytes, "Single Archive", 0)
-                self.show_resume_button()
+                self.show_resume_button(main_area)
                 return
         except Exception as e:
             if self.logger:
@@ -790,34 +815,54 @@ class ExportComponent(QWidget, ExportMethods):
             return []
         return [asset["id"] for asset in assets]
 
-    def download_and_save_archive(self, asset_ids, archive_name, archive_size_bytes):
+    def download_and_save_archive(self, main_area: QWidget, asset_ids, archive_name, archive_size_bytes, album_id=None):
         """Download and save an archive with the given asset IDs."""
         try:
-            archive_info = self.export_manager.prepare_archive(asset_ids, archive_size_bytes)
+            archive_info = self.export_manager.prepare_archive(asset_ids, archive_size_bytes, album_id)
             total_size = archive_info["totalSize"]
             if total_size == 0:
                 if self.logger:
-                    self.logger.append(f"Failed to prepare archive for {archive_name}")
+                    self.logger.append(f"Failed to prepare archive for \"{archive_name}\"")
                 return "error"
+
+            total_archives_number = len(archive_info["archives"])
 
             if self.logger:
-                self.logger.append(f"Preparing archive: Total size = {self.export_manager.format_size(total_size)}")
+                self.logger.append(f"Preparing archive (\"{archive_name}\"): total size = {self.export_manager.format_size(total_size)};")
+                self.logger.append(f"Requested max archive size = {self.export_manager.format_size(archive_size_bytes)};")
+                self.logger.append(f"Number of archives = {total_archives_number};")
+                if album_id is None:
+                    self.logger.append(f"Number of assets = {len(asset_ids)}")
+                else:
+                    albums_assets_count = sum(len(archive["assetIds"]) for archive in archive_info["archives"])
+                    self.logger.append(f"Number of assets = {albums_assets_count}")
 
-            download_result = self.export_manager.download_archive(
-                asset_ids, archive_name, total_size, self.current_download_progress_bar
-            )
+            completed_archives_count = 0
+            for archive in archive_info["archives"]:
+                local_archive_name = f"{archive_name}_{completed_archives_count + 1}" if total_archives_number > 1 else f"{archive_name}"
 
-            if download_result == "paused":
-                return "paused"
-            elif download_result == "completed":
-                self.archives_display.show()
-                self.archives_display.append(f"{archive_name}.zip")
-                return "completed"
-            else:
-                return "error"
+                self.logger.append(f"Downloading archive {completed_archives_count + 1} of {total_archives_number} for \"{local_archive_name}\"; Archive size = {self.export_manager.format_size(archive['size'])}")
+                download_result = self.export_manager.download_archive(
+                    archive["assetIds"], local_archive_name, archive["size"], main_area.current_download_progress_bar
+                )
+
+                if download_result == "paused":
+                    return "paused"
+                elif download_result == "cancelled":
+                    return "cancelled"
+                elif download_result == "completed":
+                    main_area.archives_display.show()
+                    main_area.archives_display.append(f"{local_archive_name}")
+                    completed_archives_count += 1
+                    if completed_archives_count == total_archives_number:
+                        return "completed"
+                    else:
+                        continue
+                else:
+                    return "error"
         except Exception as e:
             if self.logger:
-                self.logger.append(f"Error preparing archive for {archive_name}: {str(e)}")
+                self.logger.append(f"Error preparing archive for \"{archive_name}\": {str(e)}")
             return "error"
 
     def clear_bucket_list(self):
@@ -830,7 +875,7 @@ class ExportComponent(QWidget, ExportMethods):
         # Reset select all checkbox
         self.select_all_checkbox.setChecked(False)
 
-    def resume_export(self):
+    def resume_export(self, main_area: QWidget):
         """Resume a paused export."""
         if not self.paused_export_state:
             if self.logger:
@@ -841,11 +886,11 @@ class ExportComponent(QWidget, ExportMethods):
             self.logger.append("Resuming export process...")
 
         # Hide resume button and show stop button
-        self.resume_button.hide()
-        self.stop_button.show()
+        main_area.resume_button.hide()
+        main_area.stop_button.show()
 
         # Hide output directory button during export to prevent changes
-        self.output_dir_button.hide()
+        main_area.output_dir_button.hide()
 
         # Reset stop flag
         self.stop_requested = False
@@ -859,26 +904,25 @@ class ExportComponent(QWidget, ExportMethods):
         current_bucket_index = state.get('current_bucket_index', 0)
 
         # Update export manager with correct output directory
-        api_manager = self.login_manager.api_manager
-        self.export_manager = ExportManager(api_manager, self.logger, self.output_dir, self.stop_flag)
+        self.export_manager = ExportManager(self.login_manager, self.logger, main_area.output_dir, self.stop_flag)
 
         # Check if server supports Range headers and hide resume button if not
-        self.check_and_hide_resume_button_if_needed()
+        self.check_and_hide_resume_button_if_needed(main_area)
 
         if self.logger:
             self.logger.append(f"Resuming from bucket {current_bucket_index + 1}/{len(selected_buckets)}")
 
         if download_option.startswith("Per"):
-            self.process_buckets_individually_resume(selected_buckets, inputs, archive_size_bytes, current_bucket_index)
+            self.process_buckets_individually_resume(main_area, selected_buckets, inputs, archive_size_bytes, current_bucket_index)
         elif download_option == "Single Archive":
             # For single archive, we resume by retrying the download
-            self.process_all_buckets_combined(selected_buckets, inputs, archive_size_bytes)
+            self.process_all_buckets_combined(main_area, selected_buckets, inputs, archive_size_bytes)
 
         # Only finalize if not paused
-        if not self.paused_export_state:
-            self.finalize_export()
+        if not self.paused_export_state and self.login_manager.is_logged_in():
+            self.finalize_export(main_area)
 
-    def process_buckets_individually_resume(self, selected_buckets, inputs, archive_size_bytes, start_index=0):
+    def process_buckets_individually_resume(self, main_area: QWidget, selected_buckets, inputs, archive_size_bytes, start_index=0):
         """Process buckets individually starting from a specific index for resume."""
         for i, time_bucket in enumerate(selected_buckets[start_index:], start=start_index + 1):
             if self.stop_flag():
@@ -897,21 +941,21 @@ class ExportComponent(QWidget, ExportMethods):
                 if not asset_ids:
                     if self.logger:
                         self.logger.append(f"No assets found for bucket: {bucket_name}")
-                    self.update_progress_bar(i, len(selected_buckets))
+                    self.update_progress_bar(main_area, i, len(selected_buckets))
                     continue
 
-                download_result = self.download_and_save_archive(asset_ids, bucket_name, archive_size_bytes)
+                download_result = self.download_and_save_archive(main_area, asset_ids, bucket_name, archive_size_bytes)
                 if download_result == "paused":
                     # Save state and show resume button
                     self.save_export_state(selected_buckets, inputs, archive_size_bytes, "Per Bucket", i - 1)
-                    self.show_resume_button()
+                    self.show_resume_button(main_area)
                     return
 
             except Exception as e:
                 if self.logger:
                     self.logger.append(f"Error processing bucket {bucket_name}: {str(e)}")
 
-            self.update_progress_bar(i, len(selected_buckets))
+            self.update_progress_bar(main_area, i, len(selected_buckets))
             QApplication.processEvents()
 
         # Clear paused state on successful completion
@@ -925,21 +969,24 @@ class ExportComponent(QWidget, ExportMethods):
             'archive_size_bytes': archive_size_bytes,
             'download_option': download_option,
             'current_bucket_index': current_bucket_index,
-            'output_dir': self.output_dir
+            'output_dir': self.timeline_main_area.output_dir
         }
 
-    def show_resume_button(self):
+    def show_resume_button(self, main_area: QWidget):
         """Show resume button and hide stop button, but only if server supports Range headers."""
-        self.stop_button.hide()
+        if not self.login_manager.is_logged_in():
+            return
+
+        main_area.stop_button.hide()
 
         # Show output directory button when export is paused
-        self.output_dir_button.show()
+        main_area.output_dir_button.show()
 
         # Check if server supports Range headers
         if self.export_manager:
             # server_url = getattr(self.export_manager.api_manager, 'server_url', 'unknown')
 
-            # Check cache first - this is the most reliable source
+            # # Check cache first - this is the most reliable source
             # server_supports_range = False  # Default
             # if hasattr(self.export_manager, 'range_support_cache') and server_url in self.export_manager.range_support_cache:
             #     server_supports_range = self.export_manager.range_support_cache[server_url]
@@ -948,42 +995,42 @@ class ExportComponent(QWidget, ExportMethods):
             #     server_supports_range = self.export_manager.check_range_header_support(server_url)
 
             # if server_supports_range:
-            #     self.resume_button.show()
+            #     main_area.resume_button.show()
             #     if self.logger:
             #         self.logger.append("Export paused. Click 'Resume Export' to continue.")
             # else:
-            # Server doesn't support Range headers - show export button instead
-            self.export_button.show()
+            #     # Server doesn't support Range headers - show export button instead
+            #     main_area.export_button.show()
             if self.logger:
                 self.logger.append("Export paused. Server doesn't support resume functionality.")
                 self.logger.append("Click 'Export' to restart. Already downloaded files will be skipped automatically.")
         else:
             # Fallback if export_manager is not available
-            self.export_button.show()
+            main_area.export_button.show()
             if self.logger:
                 self.logger.append("Export paused. Click 'Export' to restart.")
 
-    def finalize_export(self):
+    def finalize_export(self, main_area: QWidget):
         """Finalize the export process."""
         if not self.paused_export_state:
             # Only finalize if not paused
-            self.stop_button.hide()
-            self.export_button.show()
-            self.archives_section.show()
-            self.current_download_progress_bar.hide()
-            self.progress_bar.hide()
+            main_area.stop_button.hide()
+            main_area.export_button.show()
+            main_area.archives_section.show()
+            main_area.current_download_progress_bar.hide()
+            main_area.progress_bar.hide()
 
             # Show output directory button when export is finished
-            self.output_dir_button.show()
+            main_area.output_dir_button.show()
 
             self.export_finished.emit()
 
     def check_for_resumable_downloads(self):
         """Check if there are any downloads that can be resumed."""
-        if not self.output_dir or not self.export_manager:
+        if not self.timeline_main_area.output_dir or not self.export_manager:
             return False
 
-        resume_dir = os.path.join(self.output_dir, ".archimmich_resume")
+        resume_dir = os.path.join(self.timeline_main_area.output_dir, ".archimmich_resume")
         if not os.path.exists(resume_dir):
             return False
 
@@ -992,7 +1039,7 @@ class ExportComponent(QWidget, ExportMethods):
         resume_files = glob.glob(os.path.join(resume_dir, "*.resume.json"))
         return len(resume_files) > 0
 
-    def check_and_hide_resume_button_if_needed(self):
+    def check_and_hide_resume_button_if_needed(self, main_area: QWidget):
         """Check if server supports Range headers and hide resume button if not."""
         if self.export_manager:
             server_url = getattr(self.export_manager.api_manager, 'server_url', 'unknown')
@@ -1007,7 +1054,7 @@ class ExportComponent(QWidget, ExportMethods):
 
             if not server_supports_range:
                 # Server doesn't support Range headers - hide resume button permanently
-                self.resume_button.hide()
+                main_area.resume_button.hide()
                 if self.logger:
                     self.logger.append("Note: Resume functionality disabled - server doesn't support Range headers.")
 

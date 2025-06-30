@@ -7,7 +7,7 @@ from PyQt5.QtWidgets import QApplication
 from src.utils.helpers import get_path_in_app
 
 class ExportManager:
-    def __init__(self, api_manager, logger, output_dir, stop_flag_callback):
+    def __init__(self, login_manager, logger, output_dir, stop_flag_callback):
         """
         Args:
             api_manager (APIManager): Instance of APIManager for API calls.
@@ -15,7 +15,8 @@ class ExportManager:
             output_dir (str): Directory where the archives will be saved.
             stop_flag_callback (callable): A function that returns True if stop is requested.
         """
-        self.api_manager = api_manager
+        self.api_manager = login_manager.api_manager
+        self.login_manager = login_manager
         self.logger = logger
         self.output_dir = output_dir
         self.stop_flag = stop_flag_callback
@@ -277,6 +278,10 @@ class ExportManager:
         return existing_files, missing_files
 
     def download_archive(self, asset_ids=None, bucket_name=None, total_size=None, current_download_progress_bar=None, album_id=None):
+        if not self.login_manager.is_logged_in():
+            self.log("User is not logged in. Download cancelled.")
+            return "cancelled"
+
         if not asset_ids and not album_id:
             self.log("No assets or album provided for download")
             return
@@ -298,11 +303,11 @@ class ExportManager:
                 size_difference = abs(existing_size - total_size)
 
                 if size_difference <= percentage_tolerance:
-                    self.log(f"Archive '{bucket_name}.zip' already exists ({self.format_size(existing_size)}). Skipping download.")
+                    self.log(f"Archive \"{bucket_name}.zip\" already exists ({self.format_size(existing_size)}). Skipping download.")
                     return "completed"
                 else:
                     # File exists but size doesn't match - could be corrupted or different content
-                    self.log(f"Archive '{bucket_name}.zip' exists but size mismatch:")
+                    self.log(f"Archive \"{bucket_name}.zip\" exists but size mismatch:")
                     self.log(f"  Existing: {self.format_size(existing_size)} ({existing_size:,} bytes)")
                     self.log(f"  Expected: {self.format_size(total_size)} ({total_size:,} bytes)")
                     self.log(f"  Difference: {self.format_size(size_difference)} ({size_difference:,} bytes)")
@@ -318,7 +323,7 @@ class ExportManager:
 
             if can_resume:
                 if not server_supports_range:
-                    self.log(f"Resume attempted for {bucket_name}.zip but server doesn't support Range headers.")
+                    self.log(f"Resume attempted for \"{bucket_name}.zip\" but server doesn't support Range headers.")
                     self.log(f"Will start fresh download to avoid corruption. Your previous progress was: {self.format_size(existing_bytes)}")
                     downloaded_size = 0
                     file_mode = "wb"
@@ -327,12 +332,12 @@ class ExportManager:
                     if os.path.exists(partial_archive_path):
                         os.remove(partial_archive_path)
                 else:
-                    self.log(f"Resuming download for {bucket_name}.zip from {self.format_size(existing_bytes)} ({existing_bytes} bytes)")
+                    self.log(f"Resuming download for \"{bucket_name}.zip\" from {self.format_size(existing_bytes)} ({existing_bytes} bytes)")
                     downloaded_size = existing_bytes
                     file_mode = "ab"  # Append mode for resume
                     headers = {"Range": f"bytes={existing_bytes}-"}
             else:
-                self.log(f"Starting fresh download: {bucket_name}.zip")
+                self.log(f"Starting fresh download: \"{bucket_name}.zip\"")
                 downloaded_size = 0
                 file_mode = "wb"  # Write mode for new download
                 headers = {}
@@ -448,6 +453,9 @@ class ExportManager:
                                     self.log(f"Note: Server doesn't support Range headers. Next resume will restart from 0% to avoid corruption.")
                                 else:
                                     self.log(f"Download stopped. Failed to preserve resume data for {bucket_name}.zip")
+                            elif not self.login_manager.is_logged_in():
+                                self.log(f"Download stopped. User is logged out.")
+                                return "cancelled"
                             else:
                                 # Normal case - save current progress
                                 if self.save_resume_metadata(bucket_name, asset_ids, total_size, total_bytes_written):
@@ -501,7 +509,7 @@ class ExportManager:
                             QApplication.processEvents()
 
                 # Download completed successfully
-                if not self.stop_flag():
+                if not self.stop_flag() and self.login_manager.is_logged_in():
                     current_download_progress_bar.setValue(100)
                     current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - 100%")
 
