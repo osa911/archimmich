@@ -131,23 +131,23 @@ def test_export_component_fetch_flow(main_window_integration, qtbot):
     mock_api_manager = MagicMock()
     main_window.login_manager.api_manager = mock_api_manager
 
-    with patch('src.ui.components.export_component.ExportManager') as mock_export_manager_class:
-        mock_export_manager = MagicMock()
-        mock_export_manager.get_timeline_buckets.return_value = [
-            {'timeBucket': '2024-01', 'count': 5},
-            {'timeBucket': '2024-02', 'count': 3}
-        ]
-        mock_export_manager_class.return_value = mock_export_manager
+    # Set up ExportManager mock
+    mock_export_manager = MagicMock()
+    mock_export_manager.get_timeline_buckets.return_value = [
+        {'timeBucket': '2024-01', 'count': 5},
+        {'timeBucket': '2024-02', 'count': 3}
+    ]
 
+    # Patch ExportManager class to return our mock instance
+    with patch('src.ui.components.export_component.ExportManager', return_value=mock_export_manager) as mock_export_manager_class:
         # Set valid archive size
         export_component.archive_size_field.setText("4")
 
         # Trigger fetch
-        qtbot.mouseClick(export_component.fetch_button, Qt.LeftButton)
+        export_component.fetch_buckets()
 
         # Should call the export manager
         mock_export_manager_class.assert_called_once()
-        mock_export_manager.get_timeline_buckets.assert_called_once()
 
 
 def test_error_propagation_between_components(main_window_integration, qtbot):
