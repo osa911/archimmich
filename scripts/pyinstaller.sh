@@ -8,7 +8,7 @@ case "$(uname)" in
     ;;
   "Linux")
     PLATFORM_OPTS=""
-    PLATFORM_DEPS=""
+    PLATFORM_DEPS="--exclude-module PyQt5.Qt5"
     ;;
   *)  # Windows
     PLATFORM_OPTS="--version-file=src/resources/version.rc"
