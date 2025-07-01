@@ -44,10 +44,16 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           chmod +x scripts/*.sh
+          # Fix hardcoded paths in build scripts
+          if [ "${{ matrix.os }}" = "ubuntu-latest" ]; then
+            sed -i 's|/app/scripts/|"$SCRIPT_DIR/"|g' scripts/build-linux.sh
+          fi
 
       - name: Build Application
         run: ${{ matrix.build_script }}
         shell: bash
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
