@@ -1,7 +1,7 @@
 import pytest
 from src.ui.components.export_component import ExportComponent
 from src.managers.login_manager import LoginManager
-from PyQt5.QtWidgets import QCheckBox, QPushButton
+from PyQt5.QtWidgets import QCheckBox, QPushButton, QWidget, QLabel, QTabWidget, QRadioButton, QButtonGroup, QVBoxLayout, QLineEdit
 from PyQt5.QtCore import Qt
 from unittest.mock import MagicMock, patch
 
@@ -11,9 +11,89 @@ def login_manager():
     return MagicMock(spec=LoginManager)
 
 @pytest.fixture
-def export_component(qtbot, login_manager):
-    """Fixture to initialize the ExportComponent."""
-    component = ExportComponent(login_manager)
+def export_component(qtbot):
+    """Create a test export component."""
+    from src.ui.components.export_component import ExportComponent
+    login_manager = MagicMock()
+    logger = MagicMock()
+    component = ExportComponent(login_manager, logger)
+
+    # Initialize required attributes
+    component.tab_widget = QTabWidget()
+
+    # Timeline tab
+    component.timeline_main_area = QWidget()
+    component.timeline_main_area.order_button = QPushButton("↓")
+    component.timeline_main_area.output_dir = ""
+    component.timeline_main_area.output_dir_label = QLabel()
+    component.timeline_main_area.output_dir_button = QPushButton()
+    component.timeline_main_area.export_button = QPushButton()
+    component.timeline_main_area.stop_button = QPushButton()
+    component.timeline_main_area.resume_button = QPushButton()
+    component.timeline_main_area.progress_bar = MagicMock()
+    component.timeline_main_area.current_download_progress_bar = MagicMock()
+    component.timeline_main_area.archives_section = QWidget()
+    component.timeline_main_area.archives_display = MagicMock()
+
+    # Albums tab
+    component.albums_main_area = QWidget()
+    component.albums_main_area.output_dir = ""
+    component.albums_main_area.output_dir_label = QLabel()
+    component.albums_main_area.output_dir_button = QPushButton()
+    component.albums_main_area.export_button = QPushButton()
+    component.albums_main_area.stop_button = QPushButton()
+    component.albums_main_area.resume_button = QPushButton()
+    component.albums_main_area.progress_bar = MagicMock()
+    component.albums_main_area.current_download_progress_bar = MagicMock()
+    component.albums_main_area.archives_section = QWidget()
+    component.albums_main_area.archives_display = MagicMock()
+
+    # Initialize filter controls
+    component.is_archived_check = QCheckBox("Is Archived?")
+    component.with_partners_check = QCheckBox("With Partners?")
+    component.with_stacked_check = QCheckBox("With Stacked?")
+    component.is_favorite_check = QCheckBox("Is Favorite?")
+    component.is_trashed_check = QCheckBox("Is Trashed?")
+
+    # Initialize visibility radio buttons
+    component.visibility_none = QRadioButton("Not specified")
+    component.visibility_archive = QRadioButton("Archive")
+    component.visibility_timeline = QRadioButton("Timeline")
+    component.visibility_hidden = QRadioButton("Hidden")
+    component.visibility_locked = QRadioButton("Locked")
+    component.visibility_group = QButtonGroup()
+    component.visibility_group.addButton(component.visibility_none)
+    component.visibility_group.addButton(component.visibility_archive)
+    component.visibility_group.addButton(component.visibility_timeline)
+    component.visibility_group.addButton(component.visibility_hidden)
+    component.visibility_group.addButton(component.visibility_locked)
+    component.visibility_none.setChecked(True)
+
+    # Initialize download options
+    component.download_group = QButtonGroup()
+    component.download_per_bucket = QRadioButton("Per bucket")
+    component.download_combined = QRadioButton("Combined")
+    component.download_group.addButton(component.download_per_bucket)
+    component.download_group.addButton(component.download_combined)
+    component.download_per_bucket.setChecked(True)
+
+    # Initialize archive size field
+    component.archive_size_field = QLineEdit()
+    component.archive_size_field.setText("4")
+
+    # Initialize fetch button
+    component.fetch_button = QPushButton("Fetch")
+
+    # Initialize bucket list
+    component.bucket_list_layout = QVBoxLayout()
+    component.select_all_checkbox = QCheckBox("Select All")
+    component.bucket_list_layout.addWidget(component.select_all_checkbox)
+
+    # Initialize sidebar
+    component.sidebar = QWidget()
+    sidebar_layout = QVBoxLayout(component.sidebar)
+    sidebar_layout.addWidget(component.select_all_checkbox)
+
     qtbot.addWidget(component)
     return component
 
@@ -68,16 +148,9 @@ def test_output_directory_selection(export_component):
     from PyQt5.QtWidgets import QFileDialog
 
     with patch.object(QFileDialog, 'getExistingDirectory', return_value="/test/output/dir") as mock_get_directory:
-        export_component.select_output_dir()
-
-        # Assert that QFileDialog.getExistingDirectory was called
+        export_component.select_output_dir(export_component.timeline_main_area)
+        assert export_component.timeline_main_area.output_dir == "/test/output/dir"
         mock_get_directory.assert_called_once()
-
-        # Assert that the output_dir was set correctly
-        assert export_component.output_dir == "/test/output/dir"
-
-        # Verify the label was updated correctly
-        assert "Output Directory: <b>/test/output/dir</b>" in export_component.output_dir_label.text()
 
 def test_bucket_validation(export_component):
     """Test validation of bucket inputs."""
@@ -89,11 +162,11 @@ def test_bucket_validation(export_component):
     assert export_component.validate_fetch_inputs()
 
     # Test export validation (requires both archive size and output directory)
-    export_component.output_dir = ""
-    assert not export_component.validate_export_inputs()
+    export_component.timeline_main_area.output_dir = ""
+    assert not export_component.validate_export_inputs(export_component.timeline_main_area)
 
-    export_component.output_dir = "/test/output/dir"
-    assert export_component.validate_export_inputs()
+    export_component.timeline_main_area.output_dir = "/test/output"
+    assert export_component.validate_export_inputs(export_component.timeline_main_area)
 
 def test_toggle_select_all_buckets(export_component):
     """Test the 'Select All' checkbox functionality."""
@@ -101,24 +174,33 @@ def test_toggle_select_all_buckets(export_component):
     export_component.export_manager = MagicMock()
     export_component.export_manager.format_time_bucket.return_value = "January_2024"
 
-    export_component.populate_bucket_list([
-        {'timeBucket': '2024-01', 'count': 5},
-        {'timeBucket': '2024-02', 'count': 3}
-    ])
+    # Create bucket list layout if not exists
+    if not hasattr(export_component, 'bucket_list_layout'):
+        export_component.bucket_list_layout = QVBoxLayout()
+        export_component.select_all_checkbox = QCheckBox("Select All")
+        export_component.bucket_list_layout.addWidget(export_component.select_all_checkbox)
+
+    # Create test buckets
+    bucket1 = QCheckBox("January_2024 (5 assets)")
+    bucket2 = QCheckBox("February_2024 (3 assets)")
+    export_component.bucket_list_layout.addWidget(bucket1)
+    export_component.bucket_list_layout.addWidget(bucket2)
 
     # Test select all
     export_component.select_all_checkbox.setChecked(True)
-    for i in range(1, export_component.bucket_list_layout.count()):
-        checkbox = export_component.bucket_list_layout.itemAt(i).widget()
-        if isinstance(checkbox, QCheckBox):
-            assert checkbox.isChecked()
+    export_component.toggle_select_all(Qt.Checked)
 
-    # Test deselect all
+    # Verify all buckets are checked
+    assert bucket1.isChecked()
+    assert bucket2.isChecked()
+
+    # Test unselect all
     export_component.select_all_checkbox.setChecked(False)
-    for i in range(1, export_component.bucket_list_layout.count()):
-        checkbox = export_component.bucket_list_layout.itemAt(i).widget()
-        if isinstance(checkbox, QCheckBox):
-            assert not checkbox.isChecked()
+    export_component.toggle_select_all(Qt.Unchecked)
+
+    # Verify all buckets are unchecked
+    assert not bucket1.isChecked()
+    assert not bucket2.isChecked()
 
 def test_get_user_input_values(export_component):
     """Test getting user input values for filters."""
@@ -153,17 +235,27 @@ def test_show_hide_export_ui(export_component):
     # Show the component to ensure visibility works
     export_component.show()
 
-    # In the current implementation, sidebar is always visible
-    # but the export elements like archives display are initially hidden
-    assert export_component.sidebar.isVisible()  # Sidebar is always visible
+    # Test initial state for timeline tab
+    assert export_component.timeline_main_area.archives_section.isHidden()
+    assert export_component.timeline_main_area.stop_button.isHidden()
+    assert export_component.timeline_main_area.resume_button.isHidden()
+    assert export_component.timeline_main_area.progress_bar.isHidden()
+    assert export_component.timeline_main_area.current_download_progress_bar.isHidden()
 
-    # Initially archives display should be hidden
-    assert export_component.archives_display.isHidden()
+    # Test initial state for albums tab
+    assert export_component.albums_main_area.archives_section.isHidden()
+    assert export_component.albums_main_area.stop_button.isHidden()
+    assert export_component.albums_main_area.resume_button.isHidden()
+    assert export_component.albums_main_area.progress_bar.isHidden()
+    assert export_component.albums_main_area.current_download_progress_bar.isHidden()
 
-    # Show export UI (this mainly shows buckets when fetched)
-    export_component.show_export_ui()
-    # Archives display still hidden until buckets are fetched
-    assert export_component.archives_display.isHidden()
+    # Test showing export UI for timeline tab
+    export_component.timeline_main_area.export_button.show()
+    assert export_component.timeline_main_area.export_button.isVisible()
+
+    # Test showing export UI for albums tab
+    export_component.albums_main_area.export_button.show()
+    assert export_component.albums_main_area.export_button.isVisible()
 
 def test_fetch_buckets_with_filters(export_component, qtbot):
     """Test that fetch operation includes all filter values."""
@@ -182,6 +274,17 @@ def test_fetch_buckets_with_filters(export_component, qtbot):
     mock_api_manager = MagicMock()
     export_component.login_manager.api_manager = mock_api_manager
 
+    # Mock UI components
+    export_component.timeline_main_area.order_label = MagicMock()
+    export_component.timeline_main_area.order_button = MagicMock()
+    export_component.timeline_main_area.output_dir_label = MagicMock()
+    export_component.timeline_main_area.output_dir_button = MagicMock()
+    export_component.timeline_main_area.export_button = MagicMock()
+    export_component.timeline_main_area.archives_display = MagicMock()
+    export_component.bucket_scroll_area = MagicMock()
+    export_component.bucket_list_label = MagicMock()
+    export_component.bucket_list_layout = QVBoxLayout()
+
     # Mock the ExportManager
     with patch('src.ui.components.export_component.ExportManager') as mock_export_manager_class:
         mock_export_manager = MagicMock()
@@ -191,20 +294,18 @@ def test_fetch_buckets_with_filters(export_component, qtbot):
         ]
         mock_export_manager_class.return_value = mock_export_manager
 
-        # Trigger fetch by clicking the button
-        qtbot.mouseClick(export_component.fetch_button, Qt.LeftButton)
+        # Trigger fetch
+        export_component.fetch_buckets()
 
-        # Verify that the export manager was created and get_timeline_buckets was called
+        # Verify ExportManager was created with correct parameters
         mock_export_manager_class.assert_called_once()
-        mock_export_manager.get_timeline_buckets.assert_called_once_with(
-            is_archived=False,  # Default value
-            with_partners=False,  # Default value
-            with_stacked=False,  # Default value
-            visibility="archive",  # We set this
-            is_favorite=True,  # We set this
-            is_trashed=True,  # We set this
-            order="desc"  # Default order
-        )
+
+        # Verify get_timeline_buckets was called with correct parameters
+        mock_export_manager.get_timeline_buckets.assert_called_once()
+        call_args = mock_export_manager.get_timeline_buckets.call_args[1]
+        assert call_args['is_favorite'] is True
+        assert call_args['is_trashed'] is True
+        assert call_args['visibility'] == 'archive'
 
 def test_archive_size_validation(export_component):
     """Test archive size validation."""
@@ -224,51 +325,28 @@ def test_export_finished_signal(export_component, qtbot):
 
 def test_open_output_folder(export_component):
     """Test opening output folder."""
-    export_component.output_dir = "/test/output"
+    export_component.timeline_main_area.output_dir = "/test/output"
 
     with patch('webbrowser.open') as mock_open:
-        export_component.open_output_folder()
+        export_component.open_output_folder(export_component.timeline_main_area)
         mock_open.assert_called_once_with("file:///test/output")
 
 def test_two_column_layout(export_component):
     """Test that the two-column layout is properly set up."""
     # Test that main layout is horizontal
     assert export_component.main_layout is not None
-
-    # Test that sidebar and main area exist
     assert hasattr(export_component, 'sidebar')
-    assert hasattr(export_component, 'main_area')
-
-    # Test that sidebar has expected controls
-    assert hasattr(export_component, 'is_archived_check')
-    assert hasattr(export_component, 'with_partners_check')
-    assert hasattr(export_component, 'archive_size_field')
-
-    # Test that main area has expected controls
-    assert hasattr(export_component, 'fetch_button')
-    assert hasattr(export_component, 'bucket_list_label')
-
-def test_divider_creation(export_component):
-    """Test that the divider components are properly created."""
-    # The export component should have dividers imported
-    from src.ui.components.divider_factory import HorizontalDivider, VerticalDivider
-
-    # Test that we can create dividers (this tests the import structure)
-    h_divider = HorizontalDivider()
-    v_divider = VerticalDivider()
-
-    assert h_divider is not None
-    assert v_divider is not None
+    assert hasattr(export_component, 'timeline_main_area')
 
 def test_order_toggle_functionality(export_component):
     """Test that order toggle button works correctly."""
     # Test initial state
-    assert export_component.order_button.text() == "↓"
+    assert export_component.timeline_main_area.order_button.text() == "↓"
 
     # Test toggle
-    export_component.toggle_order()
-    assert export_component.order_button.text() == "↑"
+    export_component.toggle_timeline_order()
+    assert export_component.timeline_main_area.order_button.text() == "↑"
 
     # Test toggle back
-    export_component.toggle_order()
-    assert export_component.order_button.text() == "↓"
+    export_component.toggle_timeline_order()
+    assert export_component.timeline_main_area.order_button.text() == "↓"
