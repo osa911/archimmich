@@ -22,7 +22,7 @@ jobs:
             build_script: ./scripts/build-linux.sh
           - os: windows-latest
             artifact_name: ArchImmich-windows
-            build_script: scripts/build-windows.sh
+            build_script: scripts\build-windows.bat
           - os: macos-latest
             artifact_name: ArchImmich-macos
             build_script: ./scripts/build-macos.sh
@@ -62,7 +62,7 @@ jobs:
 
       - name: Build Application
         run: ${{ matrix.build_script }}
-        shell: bash
+        shell: ${{ runner.os == 'Windows' && 'cmd' || 'bash' }}
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
         working-directory: ${{ github.workspace }}
