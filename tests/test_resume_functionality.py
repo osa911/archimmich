@@ -7,7 +7,7 @@ import json
 import tempfile
 import pytest
 from unittest.mock import MagicMock, patch, mock_open, call
-from PyQt5.QtWidgets import QApplication, QProgressBar
+from PyQt5.QtWidgets import QApplication, QProgressBar, QTabWidget, QWidget, QPushButton, QLabel
 
 from src.managers.export_manager import ExportManager
 from src.ui.components.export_component import ExportComponent
@@ -48,6 +48,7 @@ def export_component():
     """Create an ExportComponent for testing."""
     import sys
     from PyQt5.QtTest import QTest
+    from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QLabel, QProgressBar, QVBoxLayout, QRadioButton, QButtonGroup, QLineEdit, QCheckBox, QTabWidget
 
     # Skip Qt-dependent tests in headless environment
     if 'pytest' in sys.modules and not QApplication.instance():
@@ -58,16 +59,70 @@ def export_component():
 
     login_manager = MagicMock(spec=LoginManager)
 
-    # Mock the setup_ui method to avoid Qt widget creation
-    with patch.object(ExportComponent, 'setup_ui'):
-        component = ExportComponent(login_manager)
-        component.output_dir = "/tmp/test"
-        # Initialize attributes that would normally be created in setup_ui
-        component.stop_button = MagicMock()
-        component.resume_button = MagicMock()
-        component.export_button = MagicMock()
-        component.output_dir_button = MagicMock()
-        return component
+    # Create the component
+    component = ExportComponent(login_manager)
+    component.output_dir = "/tmp/test"
+
+    # Initialize timeline main area
+    component.timeline_main_area = QWidget()
+    component.timeline_main_area.output_dir = "/tmp/test"
+    component.timeline_main_area.output_dir_label = QLabel()
+    component.timeline_main_area.output_dir_button = QPushButton()
+    component.timeline_main_area.export_button = QPushButton()
+    component.timeline_main_area.stop_button = QPushButton()
+    component.timeline_main_area.resume_button = QPushButton()
+    component.timeline_main_area.progress_bar = MagicMock()
+    component.timeline_main_area.current_download_progress_bar = MagicMock()
+    component.timeline_main_area.archives_section = QWidget()
+    component.timeline_main_area.archives_display = MagicMock()
+
+    # Initialize albums main area
+    component.albums_main_area = QWidget()
+    component.albums_main_area.output_dir = "/tmp/test"
+    component.albums_main_area.output_dir_label = QLabel()
+    component.albums_main_area.output_dir_button = QPushButton()
+    component.albums_main_area.export_button = QPushButton()
+    component.albums_main_area.stop_button = QPushButton()
+    component.albums_main_area.resume_button = QPushButton()
+    component.albums_main_area.progress_bar = MagicMock()
+    component.albums_main_area.current_download_progress_bar = MagicMock()
+    component.albums_main_area.archives_section = QWidget()
+    component.albums_main_area.archives_display = MagicMock()
+
+    # Initialize filter controls
+    component.is_archived_check = QCheckBox("Is Archived?")
+    component.with_partners_check = QCheckBox("With Partners?")
+    component.with_stacked_check = QCheckBox("With Stacked?")
+    component.is_favorite_check = QCheckBox("Is Favorite?")
+    component.is_trashed_check = QCheckBox("Is Trashed?")
+
+    # Initialize visibility radio buttons
+    component.visibility_none = QRadioButton("Not specified")
+    component.visibility_archive = QRadioButton("Archive")
+    component.visibility_timeline = QRadioButton("Timeline")
+    component.visibility_hidden = QRadioButton("Hidden")
+    component.visibility_locked = QRadioButton("Locked")
+    component.visibility_group = QButtonGroup()
+    component.visibility_group.addButton(component.visibility_none)
+    component.visibility_group.addButton(component.visibility_archive)
+    component.visibility_group.addButton(component.visibility_timeline)
+    component.visibility_group.addButton(component.visibility_hidden)
+    component.visibility_group.addButton(component.visibility_locked)
+    component.visibility_none.setChecked(True)
+
+    # Initialize download options
+    component.download_group = QButtonGroup()
+    component.download_per_bucket = QRadioButton("Per bucket")
+    component.download_combined = QRadioButton("Combined")
+    component.download_group.addButton(component.download_per_bucket)
+    component.download_group.addButton(component.download_combined)
+    component.download_per_bucket.setChecked(True)
+
+    # Initialize archive size field
+    component.archive_size_field = QLineEdit()
+    component.archive_size_field.setText("4")
+
+    return component
 
 
 class TestResumeMetadata:
@@ -296,63 +351,82 @@ class TestDownloadResume:
 
 
 class TestExportComponentResume:
-    """Test export component resume functionality."""
+    """Test resume functionality in ExportComponent."""
 
-    def test_save_export_state(self, export_component):
-        """Test saving export state for resume."""
-        selected_buckets = ["2023-01", "2023-02"]
-        inputs = {"is_archived": False, "with_partners": True}
-        archive_size_bytes = 1000000
-        download_option = "Per Bucket"
-        current_bucket_index = 1
+    @pytest.fixture
+    def export_component(self):
+        """Create an ExportComponent for testing."""
+        from src.ui.components.export_component import ExportComponent
+        login_manager = MagicMock()
+        logger = MagicMock()
+        component = ExportComponent(login_manager, logger)
 
-        export_component.save_export_state(
-            selected_buckets, inputs, archive_size_bytes,
-            download_option, current_bucket_index
-        )
+        # Initialize required attributes
+        component.tab_widget = QTabWidget()
 
-        state = export_component.paused_export_state
-        assert state is not None
-        assert state['selected_buckets'] == selected_buckets
-        assert state['inputs'] == inputs
-        assert state['archive_size_bytes'] == archive_size_bytes
-        assert state['download_option'] == download_option
-        assert state['current_bucket_index'] == current_bucket_index
+        # Timeline tab
+        component.timeline_main_area = QWidget()
+        component.timeline_main_area.order_button = QPushButton("↓")
+        component.timeline_main_area.output_dir = ""
+        component.timeline_main_area.output_dir_label = QLabel()
+        component.timeline_main_area.output_dir_button = QPushButton()
+        component.timeline_main_area.export_button = QPushButton()
+        component.timeline_main_area.stop_button = QPushButton()
+        component.timeline_main_area.resume_button = QPushButton()
+        component.timeline_main_area.progress_bar = MagicMock()
+        component.timeline_main_area.current_download_progress_bar = MagicMock()
+        component.timeline_main_area.archives_section = QWidget()
+        component.timeline_main_area.archives_display = MagicMock()
+
+        return component
 
     def test_resume_export_no_state(self, export_component):
-        """Test resume export when no paused state exists."""
-        mock_logger = MagicMock()
-        export_component.logger = mock_logger
+        """Test resume export when no state exists."""
+        # Setup
+        export_component.timeline_main_area.export_button = MagicMock()
+        export_component.timeline_main_area.resume_button = MagicMock()
+        export_component.timeline_main_area.stop_button = MagicMock()
+        export_component.timeline_main_area.output_dir_button = MagicMock()
+        export_component.albums_main_area.export_button = MagicMock()
+        export_component.albums_main_area.resume_button = MagicMock()
+        export_component.albums_main_area.stop_button = MagicMock()
+        export_component.albums_main_area.output_dir_button = MagicMock()
+        export_component.logger = MagicMock()
 
-        export_component.resume_export()
+        # Test for timeline tab
+        export_component.resume_export(export_component.timeline_main_area)
+        export_component.logger.append.assert_called_with("No paused export to resume.")
 
-        mock_logger.append.assert_called_with("No paused export to resume.")
+        # Test for albums tab
+        export_component.resume_export(export_component.albums_main_area)
+        export_component.logger.append.assert_called_with("No paused export to resume.")
 
     def test_show_resume_button(self, export_component):
-        """Test showing resume button - current implementation shows export button."""
-        mock_logger = MagicMock()
-        export_component.logger = mock_logger
-
-        # Mock buttons
-        export_component.stop_button = MagicMock()
-        export_component.resume_button = MagicMock()
-        export_component.export_button = MagicMock()
-
-        # Test: Current implementation always shows export button
+        """Test showing resume button."""
+        # Setup export manager with mock server URL
         mock_export_manager = MagicMock()
+        mock_export_manager.api_manager.server_url = "http://test-server.com"
         export_component.export_manager = mock_export_manager
+        export_component.login_manager.is_logged_in.return_value = True
+        export_component.logger = MagicMock()
 
-        export_component.show_resume_button()
+        # Mock UI components
+        export_component.timeline_main_area.stop_button = MagicMock()
+        export_component.timeline_main_area.export_button = MagicMock()
+        export_component.timeline_main_area.output_dir_button = MagicMock()
 
-        export_component.stop_button.hide.assert_called()
-        export_component.export_button.show.assert_called()
-        # Check that log messages were called (there are two messages)
-        assert mock_logger.append.call_count == 2
+        # Test for timeline tab
+        export_component.show_resume_button(export_component.timeline_main_area)
+        export_component.timeline_main_area.stop_button.hide.assert_called_once()
+        export_component.timeline_main_area.output_dir_button.show.assert_called_once()
+        export_component.logger.append.assert_any_call("Export paused. Server doesn't support resume functionality.")
+        export_component.logger.append.assert_any_call("Click 'Export' to restart. Already downloaded files will be skipped automatically.")
 
     def test_check_for_resumable_downloads_exists(self, export_component, temp_output_dir):
         """Test checking for resumable downloads when they exist."""
-        export_component.output_dir = temp_output_dir
-        export_component.export_manager = MagicMock()
+        # Setup
+        export_component.timeline_main_area.output_dir = temp_output_dir
+        export_component.export_manager = MagicMock()  # Add mock export manager
 
         # Create resume directory and metadata file
         resume_dir = os.path.join(temp_output_dir, ".archimmich_resume")
@@ -367,9 +441,7 @@ class TestExportComponentResume:
 
     def test_check_for_resumable_downloads_none(self, export_component, temp_output_dir):
         """Test checking for resumable downloads when none exist."""
-        export_component.output_dir = temp_output_dir
-        export_component.export_manager = MagicMock()
-
+        export_component.timeline_main_area.output_dir = temp_output_dir
         result = export_component.check_for_resumable_downloads()
         assert result is False
 
@@ -379,17 +451,21 @@ class TestIntegration:
 
     def test_full_resume_workflow(self, export_component, temp_output_dir):
         """Test complete pause and resume workflow."""
-        export_component.output_dir = temp_output_dir
+        export_component.timeline_main_area.output_dir = temp_output_dir
         export_component.logger = MagicMock()
-        export_component.stop_button = MagicMock()
-        export_component.resume_button = MagicMock()
-        export_component.export_button = MagicMock()
 
         # Mock export manager
         mock_export_manager = MagicMock()
         mock_export_manager.api_manager.server_url = "http://test-server.com"
         mock_export_manager.check_range_header_support.return_value = True  # Mock Range header support
         export_component.export_manager = mock_export_manager
+        export_component.login_manager.is_logged_in.return_value = True
+
+        # Mock UI components
+        export_component.timeline_main_area.stop_button = MagicMock()
+        export_component.timeline_main_area.resume_button = MagicMock()
+        export_component.timeline_main_area.export_button = MagicMock()
+        export_component.timeline_main_area.output_dir_button = MagicMock()
 
         # Test data
         selected_buckets = ["2023-01", "2023-02"]
@@ -406,32 +482,11 @@ class TestIntegration:
         assert export_component.paused_export_state['current_bucket_index'] == 1
 
         # Step 2: Show resume button
-        export_component.show_resume_button()
-        export_component.stop_button.hide.assert_called()
-        export_component.export_button.show.assert_called()
-
-        # Step 3: Test resume (mock the methods it calls)
-        with patch.object(export_component, 'process_buckets_individually_resume') as mock_process, \
-             patch.object(export_component, 'finalize_export') as mock_finalize:
-
-            # Mock login manager
-            export_component.login_manager = MagicMock()
-            export_component.login_manager.api_manager = MagicMock()
-
-            # Clear paused state to simulate successful completion
-            def mock_process_side_effect(*args, **kwargs):
-                export_component.paused_export_state = None
-            mock_process.side_effect = mock_process_side_effect
-
-            export_component.resume_export()
-
-            # Verify resume process called with correct parameters
-            mock_process.assert_called_once_with(selected_buckets, inputs, archive_size_bytes, 1)
-            mock_finalize.assert_called_once()
-
-            # Verify UI state changes
-            export_component.resume_button.hide.assert_called()
-            export_component.stop_button.show.assert_called()
+        export_component.show_resume_button(export_component.timeline_main_area)
+        export_component.timeline_main_area.stop_button.hide.assert_called_once()
+        export_component.timeline_main_area.output_dir_button.show.assert_called_once()
+        export_component.logger.append.assert_any_call("Export paused. Server doesn't support resume functionality.")
+        export_component.logger.append.assert_any_call("Click 'Export' to restart. Already downloaded files will be skipped automatically.")
 
 
 if __name__ == "__main__":

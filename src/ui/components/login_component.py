@@ -240,8 +240,6 @@ class LoginComponent(QWidget):
             if server_info:
                 version = server_info.get('version', 'unknown')
                 server_version = version
-                if self.logger:
-                    self.logger.append(f"Connected to Immich server version {version}")
 
             # Prepare user data with all necessary info
             user_data = {

@@ -26,11 +26,15 @@ class DebugSettingsDialog(QDialog):
         self.log_request_bodies = QCheckBox("Log Request Bodies")
         self.log_request_bodies.setChecked(self.config.get('debug', {}).get('log_request_bodies', False))
 
+        self.auto_scroll_logs = QCheckBox("Auto-scroll Logs")
+        self.auto_scroll_logs.setChecked(self.config.get('debug', {}).get('auto_scroll_logs', True))
+
         # Add checkboxes to layout
         layout.addRow("", self.verbose_logging)
         layout.addRow("", self.log_api_requests)
         layout.addRow("", self.log_api_responses)
         layout.addRow("", self.log_request_bodies)
+        layout.addRow("", self.auto_scroll_logs)
 
         # Add save button
         save_button = QPushButton("Save")
@@ -46,7 +50,8 @@ class DebugSettingsDialog(QDialog):
             'verbose_logging': self.verbose_logging.isChecked(),
             'log_api_requests': self.log_api_requests.isChecked(),
             'log_api_responses': self.log_api_responses.isChecked(),
-            'log_request_bodies': self.log_request_bodies.isChecked()
+            'log_request_bodies': self.log_request_bodies.isChecked(),
+            'auto_scroll_logs': self.auto_scroll_logs.isChecked()
         })
 
         # Save to file
@@ -69,6 +74,10 @@ class DebugSettingsDialog(QDialog):
             # Update the parent's config reference so it persists
             if hasattr(self.parent(), 'config'):
                 self.parent().config = self.config
+
+            # Update auto-scroll setting in logs widget
+            if hasattr(self.parent(), 'logs'):
+                self.parent().logs.set_auto_scroll(self.auto_scroll_logs.isChecked())
 
         except Exception as e:
             if hasattr(self.parent(), 'log'):
