@@ -44,6 +44,9 @@ create_dmg_with_retry() {
             --icon "ArchImmich.app" 150 100 \
             --hide-extension "ArchImmich.app" \
             --app-drop-link 400 100 \
+            --skip-jenkins \
+            --no-internet-enable \
+            --format UDZO \
             "$DMG_PATH" "dist/ArchImmich.app"; then
             echo "DMG created successfully at $DMG_PATH"
             return 0
@@ -63,7 +66,14 @@ create_dmg_with_retry() {
         fi
     done
 
-    echo "Failed to create DMG after $max_attempts attempts"
+    # If all attempts failed, try a simpler DMG creation
+    echo "Trying simplified DMG creation..."
+    if hdiutil create -volname "ArchImmich" -srcfolder "dist/ArchImmich.app" -ov -format UDZO "$DMG_PATH"; then
+        echo "DMG created successfully using simplified method at $DMG_PATH"
+        return 0
+    fi
+
+    echo "Failed to create DMG after all attempts"
     return 1
 }
 
