@@ -1,5 +1,5 @@
 # **ArchImmich**
-
+![Downloads](https://img.shields.io/github/downloads/osa911/archimmich/total?label=Downloads)
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/osa911/archimmich)](https://github.com/osa911/archimmich/releases/latest)
 [![GitHub stars](https://img.shields.io/github/stars/osa911/archimmich)](https://github.com/osa911/archimmich/stargazers)
 **ArchImmich** is a modern export and archive tool designed for users of the Immich platform. This application simplifies the process of fetching media buckets and exporting them into archives, all while offering a sleek and user-friendly interface.
