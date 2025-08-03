@@ -1,6 +1,9 @@
 import pytest
 from src.ui.components.export_methods import ExportMethods
-from PyQt5.QtWidgets import QWidget, QCheckBox, QLineEdit, QLabel, QPushButton, QRadioButton, QButtonGroup
+from PyQt5.QtWidgets import (
+    QWidget, QCheckBox, QLineEdit, QLabel, QPushButton, QRadioButton, QButtonGroup,
+    QTabWidget
+)
 from PyQt5.QtCore import Qt
 from unittest.mock import MagicMock, patch
 
@@ -11,6 +14,10 @@ class MockExportMethodsWidget(QWidget, ExportMethods):
     def __init__(self):
         super().__init__()
         self.logger = MagicMock()
+        self.export_in_progress = False
+
+        # Create tab widget
+        self.tab_widget = QTabWidget()
 
         # Create timeline main area
         self.timeline_main_area = QWidget()
@@ -167,6 +174,25 @@ class MockExportMethodsWidget(QWidget, ExportMethods):
             return "locked"
         else:
             return ""  # none/not specified
+
+    def reset_export_state(self):
+        """Reset the export state."""
+        self.export_in_progress = False
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.tabBar().setEnabled(True)
+
+    def validate_export_inputs(self, main_area):
+        """Validate export inputs."""
+        # Check archive size
+        archive_size = self.get_archive_size_in_bytes()
+        if archive_size is None:
+            return False
+
+        # Check output directory
+        if not main_area.output_dir:
+            return False
+
+        return True
 
 
 @pytest.fixture

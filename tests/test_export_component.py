@@ -1,9 +1,16 @@
 import pytest
 from src.ui.components.export_component import ExportComponent
 from src.managers.login_manager import LoginManager
-from PyQt5.QtWidgets import QCheckBox, QPushButton, QWidget, QLabel, QTabWidget, QRadioButton, QButtonGroup, QVBoxLayout, QLineEdit
-from PyQt5.QtCore import Qt
-from unittest.mock import MagicMock, patch
+from PyQt5.QtWidgets import (
+    QCheckBox, QPushButton, QWidget, QLabel, QTabWidget, QRadioButton, QButtonGroup,
+    QVBoxLayout, QLineEdit, QSlider, QHBoxLayout, QScrollArea
+)
+from src.ui.components.flow_layout import FlowLayout
+from PyQt5.QtCore import Qt, QByteArray
+from PyQt5.QtGui import QPixmap
+from unittest import mock
+from unittest.mock import MagicMock, patch, ANY
+from src.ui.components.thumbnail_loader import ThumbnailLoader
 
 @pytest.fixture
 def login_manager():
@@ -20,6 +27,104 @@ def export_component(qtbot):
 
     # Initialize required attributes
     component.tab_widget = QTabWidget()
+    component.albums_search_input = QLineEdit()
+    component.albums_search_input.hide()
+
+    # Mock stop_flag callback
+    def stop_flag():
+        return False
+    component.stop_flag = stop_flag
+
+    # Albums tab setup
+    component.albums_main_area = QWidget()
+    component.albums_main_area.output_dir = ""
+    component.albums_main_area.output_dir_label = QLabel()
+    component.albums_main_area.output_dir_button = QPushButton()
+    component.albums_main_area.export_button = QPushButton()
+    component.albums_main_area.stop_button = QPushButton()
+    component.albums_main_area.resume_button = QPushButton()
+    component.albums_main_area.progress_bar = MagicMock()
+    component.albums_main_area.current_download_progress_bar = MagicMock()
+    component.albums_main_area.archives_section = QWidget()
+    component.albums_main_area.archives_display = MagicMock()
+
+    component.albums_scroll_area = QScrollArea()
+    component.albums_scroll_area.setWidgetResizable(True)
+    component.albums_scroll_area.hide()
+
+    # Container for both views
+    component.albums_container = QWidget()
+    component.albums_container_layout = QVBoxLayout(component.albums_container)
+    component.albums_container_layout.setSpacing(0)
+    component.albums_container_layout.setContentsMargins(10, 10, 10, 10)
+
+    # View mode controls
+    component.view_mode_group = QButtonGroup()
+    component.grid_view_btn = QRadioButton("Covers")
+    component.list_view_btn = QRadioButton("List")
+    component.view_mode_group.addButton(component.grid_view_btn)
+    component.view_mode_group.addButton(component.list_view_btn)
+    component.grid_view_btn.setChecked(True)  # Default to grid view
+
+    # Select all row with size slider
+    select_all_row = QHBoxLayout()
+
+    # Select all checkbox
+    component.select_all_albums_checkbox = QCheckBox("Select All")
+    component.select_all_albums_checkbox.setStyleSheet("""
+        QCheckBox {
+            margin: 0;
+            padding: 4px 0;
+            spacing: 0;
+        }
+    """)
+    component.select_all_albums_checkbox.stateChanged.connect(component.toggle_select_all_albums)
+    select_all_row.addWidget(component.select_all_albums_checkbox)
+
+    # Add stretch to push slider to the right
+    select_all_row.addStretch()
+
+    # Grid size slider
+    component.size_slider = QSlider(Qt.Horizontal)
+    component.size_slider.setMinimum(75)
+    component.size_slider.setMaximum(350)
+    component.size_slider.setValue(212)  # Default size
+    component.size_slider.setFixedWidth(100)
+    component.size_slider.valueChanged.connect(component.update_grid_size)
+    component.size_slider.show()  # Show by default since grid view is default
+    select_all_row.addWidget(component.size_slider)
+
+    component.albums_container_layout.addLayout(select_all_row)
+
+    # List view
+    component.list_view_widget = QWidget()
+    component.albums_list_layout = QVBoxLayout(component.list_view_widget)
+    component.albums_list_layout.setSpacing(2)
+    component.albums_list_layout.setContentsMargins(0, 0, 0, 0)
+    component.list_view_widget.hide()
+
+    # Grid view
+    component.grid_view_widget = QWidget()
+    component.albums_grid_layout = FlowLayout(component.grid_view_widget, margin=0, spacing=10)
+    component.grid_view_widget.show()
+
+    # Add both views to container
+    component.albums_container_layout.addWidget(component.list_view_widget)
+    component.albums_container_layout.addWidget(component.grid_view_widget)
+
+    component.albums_scroll_area.setWidget(component.albums_container)
+    component.albums_scroll_area.show()
+
+    # Thumbnail cache and loader
+    component.thumbnail_cache = {}
+    component.thumbnail_labels = {}
+    component.album_widgets = []
+    component.thumbnail_loader = ThumbnailLoader(component.login_manager.api_manager)
+    component.thumbnail_loader.thumbnail_loaded.connect(component.handle_thumbnail_loaded)
+
+    # Export manager for thumbnail loading
+    component.export_manager = MagicMock()
+    component.export_manager.api_manager = component.login_manager.api_manager
 
     # Timeline tab
     component.timeline_main_area = QWidget()
@@ -350,3 +455,160 @@ def test_order_toggle_functionality(export_component):
     # Test toggle back
     export_component.toggle_timeline_order()
     assert export_component.timeline_main_area.order_button.text() == "↓"
+
+def test_view_mode_initial_state(export_component):
+    """Test initial view mode state."""
+    # Grid view should be default
+    assert export_component.grid_view_btn.isChecked()
+    assert not export_component.list_view_btn.isChecked()
+
+    # Grid view widget should be visible, list view hidden
+    assert export_component.grid_view_widget.isVisible()
+    assert not export_component.list_view_widget.isVisible()
+
+    # Slider should be visible and at default value
+    assert export_component.size_slider.isVisible()
+    assert export_component.size_slider.value() == 212
+
+def test_view_mode_switching(export_component):
+    """Test switching between grid and list views."""
+    # Setup test albums
+    export_component.albums = [
+        {'albumName': 'Test Album 1', 'assetCount': 1},
+        {'albumName': 'Test Album 2', 'assetCount': 2}
+    ]
+    export_component.populate_albums_list(export_component.albums)
+
+    # Switch to list view
+    export_component.list_view_btn.setChecked(True)
+    export_component.switch_view_mode(export_component.list_view_btn)
+
+    # Verify list view state
+    assert export_component.list_view_widget.isVisible()
+    assert not export_component.grid_view_widget.isVisible()
+    assert not export_component.size_slider.isVisible()
+
+    # Switch back to grid view
+    export_component.grid_view_btn.setChecked(True)
+    export_component.switch_view_mode(export_component.grid_view_btn)
+
+    # Verify grid view state
+    assert export_component.grid_view_widget.isVisible()
+    assert not export_component.list_view_widget.isVisible()
+    assert export_component.size_slider.isVisible()
+
+def test_grid_size_slider(export_component):
+    """Test grid size slider functionality."""
+    # Setup test albums
+    export_component.albums = [{'albumName': 'Test Album', 'assetCount': 1}]
+    export_component.populate_albums_list(export_component.albums)
+
+    # Test slider range
+    assert export_component.size_slider.minimum() == 75
+    assert export_component.size_slider.maximum() == 350
+    assert export_component.size_slider.value() == 212  # Default value
+
+    # Test size update
+    new_size = 150
+    export_component.size_slider.setValue(new_size)
+    export_component.update_grid_size(new_size)
+
+    # Verify grid items were resized
+    grid_items = [export_component.grid_view_widget.layout().itemAt(i).widget()
+                 for i in range(export_component.grid_view_widget.layout().count())]
+    for item in grid_items:
+        assert item.size().width() == new_size
+        assert item.size().height() == new_size + 40  # Height includes space for text
+
+def test_view_specific_ui_elements(export_component):
+    """Test that UI elements show/hide correctly for each view mode."""
+
+    def test_thumbnail_loading_and_caching(export_component):
+        """Test that thumbnails are loaded and cached correctly."""
+        # Setup mock API manager and thumbnail data
+        mock_api_manager = MagicMock()
+        mock_response = MagicMock()
+        mock_response.content = b"fake_image_data"
+        mock_api_manager.get.return_value = mock_response
+        export_component.login_manager.api_manager = mock_api_manager
+
+        # Setup mock export manager
+        mock_export_manager = MagicMock()
+        mock_export_manager.api_manager = mock_api_manager
+        test_albums = [
+            {'albumName': 'Test Album 1', 'assetCount': 1, 'albumThumbnailAssetId': 'thumb1'},
+            {'albumName': 'Test Album 2', 'assetCount': 2, 'albumThumbnailAssetId': 'thumb2'}
+        ]
+        mock_export_manager.get_albums.return_value = test_albums
+
+        # Mock ExportManager constructor
+        with patch('src.managers.export_manager.ExportManager', return_value=mock_export_manager):
+            # Mock QPixmap.loadFromData to return True
+            with patch('PyQt5.QtGui.QPixmap.loadFromData', return_value=True):
+                # Fetch albums to properly initialize
+                export_component.fetch_albums()
+
+                # Verify API calls for thumbnails
+                expected_calls = [
+                    mock.call(f"/api/assets/{album['albumThumbnailAssetId']}/thumbnail", expected_type=None)
+                    for album in test_albums
+                ]
+                mock_api_manager.get.assert_has_calls(expected_calls, any_order=True)
+
+                # Verify thumbnails are cached
+                assert len(export_component.thumbnail_cache) == 2
+                assert 'thumb1' in export_component.thumbnail_cache
+                assert 'thumb2' in export_component.thumbnail_cache
+                assert isinstance(export_component.thumbnail_cache['thumb1'], QPixmap)
+                assert isinstance(export_component.thumbnail_cache['thumb2'], QPixmap)
+        assert isinstance(export_component.thumbnail_cache['thumb1'], QPixmap)
+        assert isinstance(export_component.thumbnail_cache['thumb2'], QPixmap)
+
+def test_thumbnail_cache_persistence(export_component):
+    """Test that thumbnail cache persists during view mode switches."""
+    # Setup mock thumbnail cache
+    mock_pixmap = QPixmap()
+    mock_pixmap.loadFromData(QByteArray(b"fake_image_data"))
+    export_component.thumbnail_cache = {
+        'thumb1': mock_pixmap,
+        'thumb2': mock_pixmap
+    }
+
+    # Setup test albums
+    test_albums = [
+        {'albumName': 'Test Album 1', 'assetCount': 1, 'albumThumbnailAssetId': 'thumb1'},
+        {'albumName': 'Test Album 2', 'assetCount': 2, 'albumThumbnailAssetId': 'thumb2'}
+    ]
+    export_component.albums = test_albums
+
+    # Mock API manager to track calls
+    mock_api_manager = MagicMock()
+    export_component.login_manager.api_manager = mock_api_manager
+
+    # Switch to list view
+    export_component.list_view_btn.setChecked(True)
+    export_component.switch_view_mode(export_component.list_view_btn)
+
+    # Switch back to grid view
+    export_component.grid_view_btn.setChecked(True)
+    export_component.switch_view_mode(export_component.grid_view_btn)
+
+    # Verify cache is preserved and no new API calls were made
+    assert len(export_component.thumbnail_cache) == 2
+    mock_api_manager.get.assert_not_called()
+
+def test_thumbnail_cache_clearing(export_component):
+    """Test that thumbnail cache is cleared appropriately."""
+    # Setup initial cache
+    mock_pixmap = QPixmap()
+    export_component.thumbnail_cache = {
+        'thumb1': mock_pixmap,
+        'thumb2': mock_pixmap
+    }
+
+    # Clear albums list
+    export_component.albums = []
+    export_component.clear_albums_list()
+
+    # Verify cache is cleared
+    assert len(export_component.thumbnail_cache) == 0
