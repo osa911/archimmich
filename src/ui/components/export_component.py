@@ -1,14 +1,16 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QCheckBox,
-    QPushButton, QProgressBar, QScrollArea,
-    QApplication, QRadioButton, QButtonGroup, QTabWidget
+    QPushButton, QProgressBar, QScrollArea, QApplication, QRadioButton, QButtonGroup, QTabWidget
 )
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QIntValidator, QIcon
+from PyQt5.QtGui import (QIntValidator, QIcon)
 
 from src.ui.components.auto_scroll_text_edit import AutoScrollTextEdit
 from src.ui.components.export_methods import ExportMethods
 from src.ui.components.divider_factory import HorizontalDivider, VerticalDivider
+from src.ui.components.thumbnail_loader import ThumbnailLoader
+from src.ui.components.flow_layout import FlowLayout
+from src.ui.components.album_thumbnail import AlbumThumbnail
 from src.managers.export_manager import ExportManager
 from src.utils.helpers import get_resource_path
 
@@ -29,6 +31,9 @@ class ExportComponent(QWidget, ExportMethods):
         # Resume functionality state
         self.paused_export_state = None
         self.export_in_progress = False
+        self.thumbnail_loader = None
+        self.thumbnail_labels = {}  # Map of asset_id to QLabel
+        self.album_widgets = []  # Keep strong references to album widgets
         self.setup_ui()
 
     def reset_export_state(self):
@@ -261,8 +266,28 @@ class ExportComponent(QWidget, ExportMethods):
         albums_layout.setContentsMargins(10, 5, 10, 10)
         albums_layout.setSpacing(10)
 
+        # Top controls layout
+        top_controls = QHBoxLayout()
+
         # Fetch albums button
-        self.init_fetch_button(albums_layout, "Fetch Albums", self.fetch_albums)
+        self.init_fetch_button(top_controls, "Fetch Albums", self.fetch_albums)
+
+        # View mode switch
+        view_mode_group = QButtonGroup(self)
+        self.grid_view_btn = QRadioButton("Covers")
+        self.list_view_btn = QRadioButton("List")
+        self.grid_view_btn.setChecked(True)  # Grid view is default
+        view_mode_group.addButton(self.grid_view_btn)
+        view_mode_group.addButton(self.list_view_btn)
+        view_mode_group.buttonClicked.connect(self.switch_view_mode)
+
+        view_mode_layout = QHBoxLayout()
+        view_mode_layout.addWidget(self.grid_view_btn)
+        view_mode_layout.addWidget(self.list_view_btn)
+        view_mode_layout.setContentsMargins(0, 0, 0, 0)
+        top_controls.addLayout(view_mode_layout)
+
+        albums_layout.addLayout(top_controls)
 
         # Search input
         self.albums_search_input = QLineEdit()
@@ -271,19 +296,45 @@ class ExportComponent(QWidget, ExportMethods):
         self.albums_search_input.hide()
         albums_layout.addWidget(self.albums_search_input)
 
-        # Albums list
+        # Albums views container
         self.albums_scroll_area = QScrollArea()
         self.albums_scroll_area.setWidgetResizable(True)
         self.albums_scroll_area.hide()
 
-        albums_list_widget = QWidget()
-        self.albums_list_layout = QVBoxLayout(albums_list_widget)
+        # Container for both views
+        self.albums_container = QWidget()
+        self.albums_container_layout = QVBoxLayout(self.albums_container)
+        self.albums_container_layout.setSpacing(0)  # No spacing between select all and views
+        self.albums_container_layout.setContentsMargins(10, 10, 10, 10)
 
+        # Select all checkbox at the top
         self.select_all_albums_checkbox = QCheckBox("Select All")
         self.select_all_albums_checkbox.stateChanged.connect(self.toggle_select_all_albums)
-        self.albums_list_layout.addWidget(self.select_all_albums_checkbox)
+        self.select_all_albums_checkbox.setStyleSheet("""
+            QCheckBox {
+                margin: 0;
+                padding: 4px 0 4px 2px;
+                spacing: 0;
+            }
+        """)
+        self.albums_container_layout.addWidget(self.select_all_albums_checkbox)
 
-        self.albums_scroll_area.setWidget(albums_list_widget)
+        # List view
+        self.list_view_widget = QWidget()
+        self.albums_list_layout = QVBoxLayout(self.list_view_widget)
+        self.albums_list_layout.setSpacing(2)
+        self.albums_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.list_view_widget.hide()
+
+        # Grid view
+        self.grid_view_widget = QWidget()
+        self.albums_grid_layout = FlowLayout(self.grid_view_widget, margin=0, spacing=10)
+
+        # Add both views to container
+        self.albums_container_layout.addWidget(self.list_view_widget)
+        self.albums_container_layout.addWidget(self.grid_view_widget)
+
+        self.albums_scroll_area.setWidget(self.albums_container)
         albums_layout.addWidget(self.albums_scroll_area)
 
         # Bottom area
@@ -305,10 +356,30 @@ class ExportComponent(QWidget, ExportMethods):
         return albums_tab
 
     def clear_albums_list(self):
-        while self.albums_list_layout.count() > 1:
-            item = self.albums_list_layout.takeAt(1)
+        """Clear both list and grid views."""
+        # Clear list view
+        while self.albums_list_layout.count() > 0:
+            item = self.albums_list_layout.takeAt(0)
             if item.widget():
-                item.widget().deleteLater()
+                item.widget().setParent(None)
+
+        # Clear grid view
+        while self.albums_grid_layout.count() > 0:
+            item = self.albums_grid_layout.takeAt(0)
+            if item.widget():
+                item.widget().setParent(None)
+
+        # Clear references
+        self.thumbnail_labels.clear()
+        for widget in self.album_widgets:
+            widget.deleteLater()
+        self.album_widgets.clear()
+
+    def closeEvent(self, event):
+        """Handle cleanup when the window is closed."""
+        if self.thumbnail_loader:
+            self.thumbnail_loader.stop()
+        super().closeEvent(event)
 
     def fetch_albums(self):
         if self.albums_scroll_area.isHidden():
@@ -348,18 +419,106 @@ class ExportComponent(QWidget, ExportMethods):
             # Hide select all checkbox on error
             self.select_all_albums_checkbox.hide()
 
+    def switch_view_mode(self, button):
+        """Switch between grid and list view modes."""
+        is_grid = button == self.grid_view_btn
+        self.grid_view_widget.setVisible(is_grid)
+        self.list_view_widget.setVisible(not is_grid)
+        if hasattr(self, 'albums'):
+            self.populate_albums_list(self.albums)
+
+    def handle_thumbnail_loaded(self, asset_id, pixmap):
+        """Handle when a thumbnail is loaded."""
+        if asset_id in self.thumbnail_labels:
+            thumbnail_widget = self.thumbnail_labels[asset_id]
+            thumbnail_widget.setPixmap(pixmap)
+
+    def create_album_grid_item(self, album):
+        """Create a grid item widget for an album."""
+        widget = QWidget()
+        widget.setFixedWidth(222)
+        layout = QVBoxLayout(widget)
+        layout.setSpacing(8)
+        layout.setContentsMargins(0, 0, 0, 8)
+
+        # Create thumbnail widget
+        thumbnail_widget = AlbumThumbnail()
+        layout.addWidget(thumbnail_widget)
+
+        # Initialize thumbnail loader if needed
+        if self.thumbnail_loader is None and self.export_manager is not None:
+            self.thumbnail_loader = ThumbnailLoader(self.export_manager.api_manager)
+            self.thumbnail_loader.thumbnail_loaded.connect(self.handle_thumbnail_loaded)
+
+        # Queue thumbnail loading if available
+        if album.get('albumThumbnailAssetId'):
+            asset_id = album['albumThumbnailAssetId']
+            self.thumbnail_labels[asset_id] = thumbnail_widget
+            if self.thumbnail_loader:
+                self.thumbnail_loader.add_to_queue(asset_id)
+
+        # Checkbox and name
+        checkbox = QCheckBox(f"{album['albumName']}")
+        checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
+        checkbox.setStyleSheet("""
+            QCheckBox {
+                font-size: 14px;
+                padding: 4px 0;
+            }
+        """)
+        layout.addWidget(checkbox)
+
+        # Asset count
+        count_label = QLabel(f"{album['assetCount']} assets")
+        count_label.setStyleSheet("""
+            color: gray;
+            font-size: 12px;
+        """)
+        layout.addWidget(count_label)
+
+        return widget, checkbox
+
+    def create_album_list_item(self, album):
+        """Create a list item widget for an album."""
+        checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
+        checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
+        checkbox.setStyleSheet("""
+            QCheckBox {
+                margin: 0;
+                padding: 4px 0;
+                spacing: 0;
+            }
+        """)
+        return checkbox
+
     def populate_albums_list(self, albums_to_show):
         """Helper method to populate the albums list with given albums."""
-        for album in albums_to_show:
-            checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
-            checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
-            self.albums_list_layout.addWidget(checkbox)
+        # Clear both views
+        self.clear_albums_list()
 
-        # Add stretch to push all items to the top
-        self.albums_list_layout.addStretch()
-
+        # Update select all checkbox
         self.select_all_albums_checkbox.setText(f"Select All ({len(albums_to_show)})")
         self.select_all_albums_checkbox.show()
+
+        if self.grid_view_btn.isChecked():
+            # Populate grid view
+            for album in albums_to_show:
+                widget, checkbox = self.create_album_grid_item(album)
+                self.album_widgets.append(widget)
+                self.albums_grid_layout.addWidget(widget)
+            self.grid_view_widget.show()
+            self.list_view_widget.hide()
+        else:
+            # Populate list view
+            for album in albums_to_show:
+                checkbox = self.create_album_list_item(album)
+                self.album_widgets.append(checkbox)
+                self.albums_list_layout.addWidget(checkbox)
+            self.albums_list_layout.addStretch()
+            self.list_view_widget.show()
+            self.grid_view_widget.hide()
+
+        # Show controls
         self.albums_main_area.output_dir_label.show()
         self.albums_main_area.output_dir_button.show()
         self.albums_main_area.export_button.show()
@@ -384,18 +543,54 @@ class ExportComponent(QWidget, ExportMethods):
         self.populate_albums_list(filtered_albums)
 
     def toggle_select_all_albums(self, state):
-        for i in range(1, self.albums_list_layout.count()):
-            checkbox = self.albums_list_layout.itemAt(i).widget()
-            if checkbox:
-                checkbox.setChecked(state == Qt.Checked)
+        """Toggle all album checkboxes in both views."""
+        is_checked = state == Qt.Checked
+
+        # Handle list view
+        for i in range(self.albums_list_layout.count()):
+            item = self.albums_list_layout.itemAt(i)
+            if item and isinstance(item.widget(), QCheckBox):
+                item.widget().setChecked(is_checked)
+
+        # Handle grid view
+        for i in range(self.albums_grid_layout.count()):
+            item = self.albums_grid_layout.itemAt(i)
+            if item and item.widget():
+                # Find checkbox in the grid item's layout
+                grid_item = item.widget()
+                for j in range(grid_item.layout().count()):
+                    widget = grid_item.layout().itemAt(j).widget()
+                    if isinstance(widget, QCheckBox):
+                        widget.setChecked(is_checked)
+                        break
 
     def get_selected_albums(self):
+        """Get selected albums from either view."""
         selected_albums = []
-        for i in range(1, self.albums_list_layout.count()):
-            checkbox = self.albums_list_layout.itemAt(i).widget()
-            if checkbox and checkbox.isChecked():
-                album = self.albums[i - 1]
-                selected_albums.append(album)
+
+        if self.grid_view_btn.isChecked():
+            # Get from grid view
+            for i in range(self.albums_grid_layout.count()):
+                item = self.albums_grid_layout.itemAt(i)
+                if item and item.widget():
+                    # Find checkbox in the grid item's layout
+                    grid_item = item.widget()
+                    for j in range(grid_item.layout().count()):
+                        widget = grid_item.layout().itemAt(j).widget()
+                        if isinstance(widget, QCheckBox) and widget.isChecked():
+                            album = self.albums[i]
+                            selected_albums.append(album)
+                            break
+        else:
+            # Get from list view
+            for i in range(self.albums_list_layout.count()):
+                item = self.albums_list_layout.itemAt(i)
+                if item and isinstance(item.widget(), QCheckBox):
+                    checkbox = item.widget()
+                    if checkbox.isChecked():
+                        album = self.albums[i]
+                        selected_albums.append(album)
+
         return selected_albums
 
     def init_download_radios(self):
