@@ -355,6 +355,9 @@ class ExportComponent(QWidget, ExportMethods):
             checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
             self.albums_list_layout.addWidget(checkbox)
 
+        # Add stretch to push all items to the top
+        self.albums_list_layout.addStretch()
+
         self.select_all_albums_checkbox.setText(f"Select All ({len(albums_to_show)})")
         self.select_all_albums_checkbox.show()
         self.albums_main_area.output_dir_label.show()
