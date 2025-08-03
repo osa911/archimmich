@@ -4,7 +4,7 @@ Tests for the About dialog component.
 
 import pytest
 from unittest.mock import patch, MagicMock
-from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QApplication, QLabel
 from PyQt5.QtTest import QTest
 from PyQt5.QtCore import Qt
 
@@ -44,20 +44,19 @@ class TestAboutDialog:
         assert about_dialog.height() == 350
 
     def test_dialog_contains_version(self, about_dialog):
-        """Test that the dialog displays the correct version."""
-        # Find the version label
-        version_labels = about_dialog.findChildren(type(about_dialog), "")
-        version_text_found = False
+        """Test that the dialog displays the correct version from constants."""
+        # Find all QLabel widgets
+        labels = about_dialog.findChildren(QLabel)
 
-        # Check if version is displayed somewhere in the dialog
-        for widget in about_dialog.findChildren(type(about_dialog.findChild(type(about_dialog.findChild(type(about_dialog)))))):
-            if hasattr(widget, 'text') and callable(widget.text):
-                if f"Version {VERSION}" in widget.text():
+        # Look for the version label
+        version_text_found = False
+        for label in labels:
+            if hasattr(label, 'text') and callable(label.text):
+                if f"Version {VERSION}" in label.text():
                     version_text_found = True
                     break
 
-        # Alternative check - just verify VERSION constant is used
-        assert VERSION == "0.1.0"  # Current version from constants
+        assert version_text_found, f"Version text 'Version {VERSION}' not found in dialog"
 
     def test_dialog_has_buttons(self, about_dialog):
         """Test that the dialog has the expected buttons."""

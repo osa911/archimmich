@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.0] - 2025-08-03
+
+### Added
+
+- **Album Export Feature**:
+  - Support for browsing and exporting albums
+  - Search functionality to filter albums by name
+  - Dual view modes: List and Grid (covers) view
+  - Dynamic album cover size adjustment (75px to 350px)
+  - Thumbnail caching for improved performance
+  - Responsive grid layout with automatic reflow
+  - Album cover hover effects showing full album names
+- **Export Enhancements**:
+  - Pause and resume support for album exports
+  - Export path validation for albums tab
+  - Prevention of tab switching during active exports
+  - Clear feedback when no albums are found
+  - Error messages displayed in UI for fetch failures
+
+### Changed
+
+- **UI Improvements**:
+  - Added icons to buttons and labels
+  - Better visual clarity and user experience
+
+### Technical Improvements
+
+- **Testing**:
+  - Added comprehensive tests for album export features
+  - Enhanced CI workflow with headless GUI testing support
+
 ## [0.1.0] - 2025-06-16
 
 ### Added
