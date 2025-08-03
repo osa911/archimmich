@@ -264,6 +264,13 @@ class ExportComponent(QWidget, ExportMethods):
         # Fetch albums button
         self.init_fetch_button(albums_layout, "Fetch Albums", self.fetch_albums)
 
+        # Search input
+        self.albums_search_input = QLineEdit()
+        self.albums_search_input.setPlaceholderText("Search albums by name")
+        self.albums_search_input.textChanged.connect(self.filter_albums)
+        self.albums_search_input.hide()
+        albums_layout.addWidget(self.albums_search_input)
+
         # Albums list
         self.albums_scroll_area = QScrollArea()
         self.albums_scroll_area.setWidgetResizable(True)
@@ -318,19 +325,10 @@ class ExportComponent(QWidget, ExportMethods):
 
             # Add albums to the list or show no albums message
             if self.albums:
-                for album in self.albums:
-                    checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
-                    checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
-                    self.albums_list_layout.addWidget(checkbox)
-
-                self.select_all_albums_checkbox.setText(f"Select All ({len(self.albums)})")
-                self.albums_main_area.output_dir_label.show()
-                self.albums_main_area.output_dir_button.show()
-                self.albums_main_area.export_button.show()
-                self.albums_main_area.export_button.show()
-                self.albums_main_area.archives_display.show()
-
+                self.albums_search_input.show()  # Show search input when albums are loaded
+                self.populate_albums_list(self.albums)
             else:
+                self.albums_search_input.hide()  # Hide search input when no albums
                 no_albums_label = QLabel("No albums found")
                 no_albums_label.setStyleSheet("color: gray; padding: 10px;")
                 no_albums_label.setAlignment(Qt.AlignCenter)
@@ -349,6 +347,38 @@ class ExportComponent(QWidget, ExportMethods):
             self.albums_list_layout.addWidget(error_label)
             # Hide select all checkbox on error
             self.select_all_albums_checkbox.hide()
+
+    def populate_albums_list(self, albums_to_show):
+        """Helper method to populate the albums list with given albums."""
+        for album in albums_to_show:
+            checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
+            checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
+            self.albums_list_layout.addWidget(checkbox)
+
+        self.select_all_albums_checkbox.setText(f"Select All ({len(albums_to_show)})")
+        self.select_all_albums_checkbox.show()
+        self.albums_main_area.output_dir_label.show()
+        self.albums_main_area.output_dir_button.show()
+        self.albums_main_area.export_button.show()
+        self.albums_main_area.archives_display.show()
+
+    def filter_albums(self, search_text):
+        """Filter albums based on search text."""
+        if not hasattr(self, 'albums') or not self.albums:
+            return
+
+        # Clear the current list
+        self.clear_albums_list()
+
+        # Filter albums based on search text
+        search_text = search_text.lower()
+        filtered_albums = [
+            album for album in self.albums
+            if search_text in album['albumName'].lower()
+        ]
+
+        # Populate the list with filtered albums
+        self.populate_albums_list(filtered_albums)
 
     def toggle_select_all_albums(self, state):
         for i in range(1, self.albums_list_layout.count()):
