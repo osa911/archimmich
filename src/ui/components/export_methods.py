@@ -26,6 +26,7 @@ class ExportMethods:
         self.bucket_scroll_area.hide()
         self.timeline_main_area.order_label.hide()
         self.timeline_main_area.order_button.hide()
+        self.albums_search_input.hide()  # Hide albums search input
 
         for main_area in [self.timeline_main_area, self.albums_main_area]:
             main_area.export_button.hide()

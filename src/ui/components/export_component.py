@@ -34,6 +34,7 @@ class ExportComponent(QWidget, ExportMethods):
         self.export_in_progress = False
         self.thumbnail_loader = None
         self.thumbnail_labels = {}  # Map of asset_id to QLabel
+        self.thumbnail_cache = {}  # Map of asset_id to QPixmap
         self.album_widgets = []  # Keep strong references to album widgets
         self.setup_ui()
 
@@ -399,6 +400,10 @@ class ExportComponent(QWidget, ExportMethods):
             widget.deleteLater()
         self.album_widgets.clear()
 
+        # Clear thumbnail cache only when albums list is cleared (not on view switch)
+        if not hasattr(self, 'albums') or not self.albums:
+            self.thumbnail_cache.clear()
+
     def closeEvent(self, event):
         """Handle cleanup when the window is closed."""
         if self.thumbnail_loader:
@@ -406,6 +411,9 @@ class ExportComponent(QWidget, ExportMethods):
         super().closeEvent(event)
 
     def fetch_albums(self):
+        if self.logger:
+            self.logger.append("Fetching albums...")
+
         if self.albums_scroll_area.isHidden():
             self.albums_scroll_area.show()
             self.tab_widget.currentWidget().layout().setStretchFactor(self.albums_scroll_area, 1)
@@ -420,9 +428,13 @@ class ExportComponent(QWidget, ExportMethods):
 
             # Add albums to the list or show no albums message
             if self.albums:
+                if self.logger:
+                    self.logger.append(f"Albums fetched successfully: {len(self.albums)} albums found.")
                 self.albums_search_input.show()  # Show search input when albums are loaded
                 self.populate_albums_list(self.albums)
             else:
+                if self.logger:
+                    self.logger.append("No albums found.")
                 self.albums_search_input.hide()  # Hide search input when no albums
                 no_albums_label = QLabel("No albums found")
                 no_albums_label.setStyleSheet("color: gray; padding: 10px;")
@@ -432,10 +444,11 @@ class ExportComponent(QWidget, ExportMethods):
                 self.select_all_albums_checkbox.hide()
 
         except Exception as e:
+            error_msg = f"Error fetching albums: {str(e)}"
             if self.logger:
-                self.logger.append(f"Error fetching albums: {str(e)}")
+                self.logger.append(error_msg)
             # Show error message in the UI
-            error_label = QLabel(f"Error fetching albums: {str(e)}")
+            error_label = QLabel(error_msg)
             error_label.setStyleSheet("color: red; padding: 10px;")
             error_label.setAlignment(Qt.AlignCenter)
             error_label.setWordWrap(True)
@@ -520,6 +533,9 @@ class ExportComponent(QWidget, ExportMethods):
 
     def handle_thumbnail_loaded(self, asset_id, pixmap):
         """Handle when a thumbnail is loaded."""
+        # Store in cache
+        self.thumbnail_cache[asset_id] = pixmap
+        # Update widget if it exists
         if asset_id in self.thumbnail_labels:
             thumbnail_widget = self.thumbnail_labels[asset_id]
             thumbnail_widget.setPixmap(pixmap)
@@ -600,11 +616,16 @@ class ExportComponent(QWidget, ExportMethods):
             self.thumbnail_loader = ThumbnailLoader(self.export_manager.api_manager)
             self.thumbnail_loader.thumbnail_loaded.connect(self.handle_thumbnail_loaded)
 
-        # Queue thumbnail loading if available
+        # Handle thumbnail loading/caching
         if album.get('albumThumbnailAssetId'):
             asset_id = album['albumThumbnailAssetId']
             self.thumbnail_labels[asset_id] = thumbnail_widget
-            if self.thumbnail_loader:
+
+            # Use cached thumbnail if available
+            if asset_id in self.thumbnail_cache:
+                thumbnail_widget.setPixmap(self.thumbnail_cache[asset_id])
+            # Otherwise queue for loading
+            elif self.thumbnail_loader:
                 self.thumbnail_loader.add_to_queue(asset_id)
 
         # Checkbox and name
