@@ -8,7 +8,7 @@ case "$(uname)" in
     ;;
   "Linux")
     PLATFORM_OPTS=""
-    PLATFORM_DEPS=""
+    PLATFORM_DEPS="--exclude-module PyQt5.Qt5"
     ;;
   *)  # Windows
     PLATFORM_OPTS="--version-file=src/resources/version.rc"
@@ -36,7 +36,7 @@ $PYINSTALLER \
   --windowed \
   --optimize "2" \
   --icon="src/resources/favicon-180.png" \
-  --add-data "src/resources/*:src/resources" \
+  --add-data "src/resources:src/resources" \
   --add-data "version.txt:." \
   --paths="src" \
   --name "ArchImmich" \

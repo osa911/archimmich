@@ -2,7 +2,7 @@
 from PyInstaller.utils.hooks import collect_dynamic_libs
 from PyInstaller.utils.hooks import collect_all
 
-datas = [('src/resources/*', 'src/resources')]
+datas = [('src/resources', 'src/resources')]
 binaries = []
 hiddenimports = []
 binaries += collect_dynamic_libs('_internal')
@@ -53,4 +53,11 @@ coll = COLLECT(
     upx=True,
     upx_exclude=[],
     name='ArchImmich',
+)
+
+app = BUNDLE(
+    coll,
+    name='ArchImmich.app',
+    icon='src/resources/favicon-180.png',
+    bundle_identifier='com.osa911.archimmich',
 )

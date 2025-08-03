@@ -120,3 +120,36 @@ def test_clear_and_append(auto_scroll_text_edit):
     auto_scroll_text_edit.append("New content")
     assert "New content" in auto_scroll_text_edit.toPlainText()
     assert "Initial content" not in auto_scroll_text_edit.toPlainText()
+
+
+def test_auto_scroll_control(auto_scroll_text_edit):
+    """Test enabling and disabling auto-scroll functionality."""
+    # Show the widget to enable proper cursor operations
+    auto_scroll_text_edit.show()
+
+    # Test initial state (should be enabled by default)
+    assert auto_scroll_text_edit.auto_scroll_enabled == True
+
+    # Test disabling auto-scroll
+    with patch.object(auto_scroll_text_edit, 'moveCursor') as mock_move, \
+         patch.object(auto_scroll_text_edit, 'ensureCursorVisible') as mock_ensure:
+
+        auto_scroll_text_edit.set_auto_scroll(False)
+        assert auto_scroll_text_edit.auto_scroll_enabled == False
+
+        # Append text - should not trigger scroll
+        auto_scroll_text_edit.append("Test message")
+        mock_move.assert_not_called()
+        mock_ensure.assert_not_called()
+
+    # Test re-enabling auto-scroll
+    with patch.object(auto_scroll_text_edit, 'moveCursor') as mock_move, \
+         patch.object(auto_scroll_text_edit, 'ensureCursorVisible') as mock_ensure:
+
+        auto_scroll_text_edit.set_auto_scroll(True)
+        assert auto_scroll_text_edit.auto_scroll_enabled == True
+
+        # Append text - should trigger scroll
+        auto_scroll_text_edit.append("Test message")
+        mock_move.assert_called_once_with(QTextCursor.End)
+        mock_ensure.assert_called_once()
