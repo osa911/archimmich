@@ -19,10 +19,11 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: requirements.txt
 
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir -r requirements.txt
+          pip install -r requirements.txt
       - name: Make scripts executable
         run: |
           chmod +x scripts/*.sh
@@ -80,7 +81,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install --no-cache-dir -r requirements.txt
+          pip install -r requirements.txt
 
       - name: Make scripts executable
         if: runner.os != 'Windows'
