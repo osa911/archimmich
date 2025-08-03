@@ -1034,6 +1034,9 @@ class ExportComponent(QWidget, ExportMethods):
             # Show output directory button when export is finished
             main_area.output_dir_button.show()
 
+            # Re-enable tab switching when export is completed
+            self.reset_export_state()
+
             self.export_finished.emit()
 
     def check_for_resumable_downloads(self):

@@ -97,26 +97,27 @@ class ExportMethods:
     def validate_export_inputs(self, main_area: QWidget):
         """Validate inputs for export (archive size and output directory required)."""
         is_valid = True
-        if main_area.objectName() == "albums_main_area":
-            return is_valid # No validation for albums for now
-
-        self.archive_size_label.setStyleSheet("")
-        self.archive_size_field.setStyleSheet("")
         main_area.output_dir_label.setStyleSheet("")
 
-        archive_size_bytes = self.get_archive_size_in_bytes()
-        if archive_size_bytes is None:
-            if self.logger:
-                self.logger.append("Error: Archive size must be specified in GB.")
-            self.archive_size_label.setStyleSheet("color: red; font-weight: bold;")
-            self.archive_size_field.setStyleSheet("border: 2px solid red;")
-            is_valid = False
-
+        # Validate output directory for both tabs
         if not main_area.output_dir:
             if self.logger:
                 self.logger.append("Error: Output directory must be selected.")
             main_area.output_dir_label.setStyleSheet("color: red; font-weight: bold;")
             is_valid = False
+
+        # Archive size validation only for timeline tab
+        if main_area.objectName() == "timeline_main_area":
+            self.archive_size_label.setStyleSheet("")
+            self.archive_size_field.setStyleSheet("")
+
+            archive_size_bytes = self.get_archive_size_in_bytes()
+            if archive_size_bytes is None:
+                if self.logger:
+                    self.logger.append("Error: Archive size must be specified in GB.")
+                self.archive_size_label.setStyleSheet("color: red; font-weight: bold;")
+                self.archive_size_field.setStyleSheet("border: 2px solid red;")
+                is_valid = False
 
         return is_valid
 
@@ -189,7 +190,6 @@ class ExportMethods:
             _main_area.export_button.show()
 
             # Show output directory button when export is stopped
-            _main_area.output_dir_button.show()
             _main_area.progress_bar.hide()
             _main_area.current_download_progress_bar.hide()
 
@@ -223,7 +223,7 @@ class ExportMethods:
 
         # Re-enable tab switching
         self.export_in_progress = False
-        self.tab_widget.setEnabled(True)
+        self.tab_widget.tabBar().setEnabled(True)
 
         self.export_finished.emit()
 
