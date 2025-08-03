@@ -6,7 +6,7 @@
 **ArchImmich** is a modern export and archive tool designed for users of the Immich platform. This application simplifies the process of fetching media buckets and exporting them into archives, all while offering a sleek and user-friendly interface.
 
 <div align="center">
-    <img src="https://github.com/user-attachments/assets/439721f1-ee8c-49fa-ad75-b7bcad8f5ad0" alt="ArchImmich UI">
+    <img src="https://github.com/user-attachments/assets/e783a2f2-cc9f-4f84-a061-6db6d40177d0" alt="ArchImmich UI">
 </div>
 
 ## **Download**
@@ -341,7 +341,7 @@ If you encounter any issues with the application, please include the relevant lo
 
 | light theme                                                                               | dark theme                                                                                |
 | ----------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| ![image](https://github.com/user-attachments/assets/f45d2f57-ff7c-48f6-ae00-dcbdc5b4b1e9) | ![image](https://github.com/user-attachments/assets/439721f1-ee8c-49fa-ad75-b7bcad8f5ad0) |
+| ![image](https://github.com/user-attachments/assets/1e4b00bf-8776-4947-83fd-9d988ce8686a) | ![image](https://github.com/user-attachments/assets/e783a2f2-cc9f-4f84-a061-6db6d40177d0) |
 
 ---
 
