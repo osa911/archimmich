@@ -1,6 +1,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QCheckBox,
-    QPushButton, QProgressBar, QScrollArea, QApplication, QRadioButton, QButtonGroup, QTabWidget
+    QPushButton, QProgressBar, QScrollArea, QApplication, QRadioButton, QButtonGroup, QTabWidget,
+    QSlider
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import (QIntValidator, QIcon)
@@ -285,6 +286,7 @@ class ExportComponent(QWidget, ExportMethods):
         view_mode_layout.addWidget(self.grid_view_btn)
         view_mode_layout.addWidget(self.list_view_btn)
         view_mode_layout.setContentsMargins(0, 0, 0, 0)
+
         top_controls.addLayout(view_mode_layout)
 
         albums_layout.addLayout(top_controls)
@@ -307,7 +309,10 @@ class ExportComponent(QWidget, ExportMethods):
         self.albums_container_layout.setSpacing(0)  # No spacing between select all and views
         self.albums_container_layout.setContentsMargins(10, 10, 10, 10)
 
-        # Select all checkbox at the top
+        # Select all row with size slider
+        select_all_row = QHBoxLayout()
+
+        # Select all checkbox
         self.select_all_albums_checkbox = QCheckBox("Select All")
         self.select_all_albums_checkbox.stateChanged.connect(self.toggle_select_all_albums)
         self.select_all_albums_checkbox.setStyleSheet("""
@@ -317,7 +322,22 @@ class ExportComponent(QWidget, ExportMethods):
                 spacing: 0;
             }
         """)
-        self.albums_container_layout.addWidget(self.select_all_albums_checkbox)
+        select_all_row.addWidget(self.select_all_albums_checkbox)
+
+        # Add stretch to push slider to the right
+        select_all_row.addStretch()
+
+        # Size slider for grid view
+        self.size_slider = QSlider(Qt.Horizontal)
+        self.size_slider.setMinimum(73)
+        self.size_slider.setMaximum(323)
+        self.size_slider.setValue(212)
+        self.size_slider.setFixedWidth(100)
+        self.size_slider.valueChanged.connect(self.update_grid_size)
+        self.size_slider.show()  # Show by default since grid view is default
+        select_all_row.addWidget(self.size_slider)
+
+        self.albums_container_layout.addLayout(select_all_row)
 
         # List view
         self.list_view_widget = QWidget()
@@ -336,6 +356,9 @@ class ExportComponent(QWidget, ExportMethods):
 
         self.albums_scroll_area.setWidget(self.albums_container)
         albums_layout.addWidget(self.albums_scroll_area)
+
+        # Initial view mode setup after all widgets are created
+        self.switch_view_mode(self.grid_view_btn)
 
         # Bottom area
         self.albums_main_area = QWidget()
@@ -424,6 +447,7 @@ class ExportComponent(QWidget, ExportMethods):
         is_grid = button == self.grid_view_btn
         self.grid_view_widget.setVisible(is_grid)
         self.list_view_widget.setVisible(not is_grid)
+        self.size_slider.setVisible(is_grid)  # Show slider only in grid view
         if hasattr(self, 'albums'):
             self.populate_albums_list(self.albums)
 
@@ -433,16 +457,37 @@ class ExportComponent(QWidget, ExportMethods):
             thumbnail_widget = self.thumbnail_labels[asset_id]
             thumbnail_widget.setPixmap(pixmap)
 
+    def update_grid_size(self, size):
+        """Update the size of all grid items."""
+        for i in range(self.albums_grid_layout.count()):
+            widget = self.albums_grid_layout.itemAt(i).widget()
+            if widget:
+                widget.setFixedSize(size, size + 40)  # Add space for text
+                # Update thumbnail size
+                for j in range(widget.layout().count()):
+                    item = widget.layout().itemAt(j).widget()
+                    if isinstance(item, AlbumThumbnail):
+                        item.setFixedSize(size, size)
+                        item.updateSize(size)  # Update internal size for proper scaling
+
     def create_album_grid_item(self, album):
         """Create a grid item widget for an album."""
         widget = QWidget()
-        widget.setFixedWidth(222)
+        current_size = self.size_slider.value()
+        widget.setFixedSize(current_size, current_size + 40)  # Add space for text
+
+        # Set tooltip for the entire widget
+        tooltip_text = f"Album: {album['albumName']}\nAssets: {album['assetCount']}"
+        widget.setToolTip(tooltip_text)
+
         layout = QVBoxLayout(widget)
-        layout.setSpacing(8)
-        layout.setContentsMargins(0, 0, 0, 8)
+        layout.setSpacing(4)  # Reduced spacing for better proportions
+        layout.setContentsMargins(0, 0, 0, 4)
 
         # Create thumbnail widget
         thumbnail_widget = AlbumThumbnail()
+        # Size is already set to match slider's default in AlbumThumbnail
+        thumbnail_widget.setToolTip(tooltip_text)  # Also set tooltip on thumbnail
         layout.addWidget(thumbnail_widget)
 
         # Initialize thumbnail loader if needed
@@ -466,6 +511,8 @@ class ExportComponent(QWidget, ExportMethods):
                 padding: 4px 0;
             }
         """)
+        # Set tooltip on checkbox too
+        checkbox.setToolTip(tooltip_text)
         layout.addWidget(checkbox)
 
         # Asset count
