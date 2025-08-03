@@ -28,7 +28,14 @@ class ExportComponent(QWidget, ExportMethods):
         self.export_manager = None
         # Resume functionality state
         self.paused_export_state = None
+        self.export_in_progress = False
         self.setup_ui()
+
+    def reset_export_state(self):
+        """Reset the export state and enable tab switching."""
+        self.export_in_progress = False
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.tabBar().setEnabled(True)
 
     def setup_ui(self):
         # Main horizontal layout
@@ -662,6 +669,10 @@ class ExportComponent(QWidget, ExportMethods):
         # Clear any existing paused state when starting fresh
         self.paused_export_state = None
         main_area.resume_button.hide()  # Hide resume button when starting new export
+
+        # Disable only tab switching during export, keep content interactive
+        self.export_in_progress = True
+        self.tab_widget.tabBar().setEnabled(False)
 
         selected_items = self.get_selected_albums() if main_area.objectName() == "albums_main_area" else self.get_selected_buckets()
 

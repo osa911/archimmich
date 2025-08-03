@@ -193,6 +193,9 @@ class ExportMethods:
             _main_area.progress_bar.hide()
             _main_area.current_download_progress_bar.hide()
 
+        # Re-enable tab switching when export is stopped
+        self.reset_export_state()
+
     def setup_progress_bar(self, main_area: QWidget, total):
         """Setup the main progress bar."""
         main_area.progress_bar.setRange(0, total)
@@ -217,6 +220,10 @@ class ExportMethods:
 
         # Show output directory button when export is finalized
         main_area.output_dir_button.show()
+
+        # Re-enable tab switching
+        self.export_in_progress = False
+        self.tab_widget.setEnabled(True)
 
         self.export_finished.emit()
 

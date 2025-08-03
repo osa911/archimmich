@@ -285,6 +285,9 @@ class MainWindow(QMainWindow):
         self.login_component.logger = self.logger
         self.export_component.logger = self.logger
 
+        # Reset export state and enable tabs
+        self.export_component.reset_export_state()
+
     def on_login_failed(self, error_message):
         """Handle failed login."""
         # Don't show header for failed login, let the login component handle the error display
@@ -320,6 +323,7 @@ class MainWindow(QMainWindow):
         self.export_component.hide_export_ui()
         self.export_component.albums_scroll_area.hide()
         self.export_component.clear_albums_list()
+        self.export_component.reset_export_state()
 
         # Hide/show appropriate UI sections
         self.export_component.hide()
