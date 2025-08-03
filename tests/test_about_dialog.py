@@ -15,9 +15,16 @@ from src.constants import VERSION
 @pytest.fixture
 def app():
     """Create QApplication for testing."""
-    if not QApplication.instance():
-        return QApplication([])
-    return QApplication.instance()
+    try:
+        if not QApplication.instance():
+            app = QApplication([])
+            yield app
+            app.quit()
+        else:
+            yield QApplication.instance()
+    except Exception as e:
+        print(f"Error creating QApplication: {e}")
+        raise
 
 
 @pytest.fixture

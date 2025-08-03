@@ -27,6 +27,8 @@ jobs:
         run: |
           chmod +x scripts/*.sh
       - name: Run tests
+        env:
+          QT_QPA_PLATFORM: offscreen
         run: |
           ./scripts/run-tests.sh
 
