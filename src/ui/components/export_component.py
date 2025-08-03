@@ -314,14 +314,15 @@ class ExportComponent(QWidget, ExportMethods):
 
         # Select all checkbox
         self.select_all_albums_checkbox = QCheckBox("Select All")
-        self.select_all_albums_checkbox.stateChanged.connect(self.toggle_select_all_albums)
         self.select_all_albums_checkbox.setStyleSheet("""
             QCheckBox {
                 margin: 0;
-                padding: 4px 0 4px 2px;
+                padding: 4px 0;
                 spacing: 0;
             }
         """)
+        # Connect after setting up the checkbox to avoid initial signal
+        self.select_all_albums_checkbox.stateChanged.connect(self.toggle_select_all_albums)
         select_all_row.addWidget(self.select_all_albums_checkbox)
 
         # Add stretch to push slider to the right
@@ -445,11 +446,77 @@ class ExportComponent(QWidget, ExportMethods):
     def switch_view_mode(self, button):
         """Switch between grid and list view modes."""
         is_grid = button == self.grid_view_btn
+
+        # Store currently selected albums before hiding the current view
+        selected_albums = []
+        if is_grid:
+            # Get from list view before switching
+            for i in range(self.albums_list_layout.count()):
+                item = self.albums_list_layout.itemAt(i)
+                if item and item.widget():
+                    list_item = item.widget()
+                    for j in range(list_item.layout().count()):
+                        widget = list_item.layout().itemAt(j).widget()
+                        if isinstance(widget, QCheckBox) and widget.isChecked():
+                            album_name = widget.text().split(" (")[0]
+                            album = next((a for a in self.albums if a['albumName'] == album_name), None)
+                            if album:
+                                selected_albums.append(album)
+                            break
+        else:
+            # Get from grid view before switching
+            for i in range(self.albums_grid_layout.count()):
+                item = self.albums_grid_layout.itemAt(i)
+                if item and item.widget():
+                    grid_item = item.widget()
+                    for j in range(grid_item.layout().count()):
+                        widget = grid_item.layout().itemAt(j).widget()
+                        if isinstance(widget, QCheckBox) and widget.isChecked():
+                            album_name = widget.text().split(" (")[0]
+                            album = next((a for a in self.albums if a['albumName'] == album_name), None)
+                            if album:
+                                selected_albums.append(album)
+                            break
+
+        # Switch visibility
         self.grid_view_widget.setVisible(is_grid)
         self.list_view_widget.setVisible(not is_grid)
         self.size_slider.setVisible(is_grid)  # Show slider only in grid view
+
         if hasattr(self, 'albums'):
             self.populate_albums_list(self.albums)
+
+            # Restore selection state
+            if selected_albums:
+                selected_album_names = {album['albumName'] for album in selected_albums}
+                if is_grid:
+                    # Restore grid view selection
+                    for i in range(self.albums_grid_layout.count()):
+                        item = self.albums_grid_layout.itemAt(i)
+                        if item and item.widget():
+                            grid_item = item.widget()
+                            for j in range(grid_item.layout().count()):
+                                widget = grid_item.layout().itemAt(j).widget()
+                                if isinstance(widget, QCheckBox):
+                                    album_name = widget.text().split(" (")[0]
+                                    if album_name in selected_album_names:
+                                        widget.setChecked(True)
+
+                                    break
+                else:
+                    # Restore list view selection
+                    for i in range(self.albums_list_layout.count()):
+                        item = self.albums_list_layout.itemAt(i)
+                        if item and item.widget():
+                            list_item = item.widget()
+                            for j in range(list_item.layout().count()):
+                                widget = list_item.layout().itemAt(j).widget()
+                                if isinstance(widget, QCheckBox):
+                                    album_name = widget.text().split(" (")[0]
+                                    if album_name in selected_album_names:
+                                        widget.setChecked(True)
+
+                                    break
 
     def handle_thumbnail_loaded(self, asset_id, pixmap):
         """Handle when a thumbnail is loaded."""
@@ -470,11 +537,49 @@ class ExportComponent(QWidget, ExportMethods):
                         item.setFixedSize(size, size)
                         item.updateSize(size)  # Update internal size for proper scaling
 
+    def update_select_all_state(self):
+        """Update the state of the Select All checkbox based on individual selections."""
+        # Temporarily disconnect the signal to avoid recursion
+        self.select_all_albums_checkbox.blockSignals(True)
+
+        if self.grid_view_btn.isChecked():
+            # Check grid view
+            total_count = self.albums_grid_layout.count()
+            checked_count = 0
+            for i in range(total_count):
+                item = self.albums_grid_layout.itemAt(i)
+                if item and item.widget():
+                    grid_item = item.widget()
+                    for j in range(grid_item.layout().count()):
+                        widget = grid_item.layout().itemAt(j).widget()
+                        if isinstance(widget, QCheckBox) and widget.isChecked():
+                            checked_count += 1
+                            break
+            self.select_all_albums_checkbox.setChecked(checked_count == total_count)
+        else:
+            # Check list view
+            total_count = self.albums_list_layout.count() - 1  # Subtract 1 for stretch item
+            checked_count = 0
+            for i in range(total_count):
+                item = self.albums_list_layout.itemAt(i)
+                if item and item.widget():
+                    list_item = item.widget()
+                    for j in range(list_item.layout().count()):
+                        widget = list_item.layout().itemAt(j).widget()
+                        if isinstance(widget, QCheckBox) and widget.isChecked():
+                            checked_count += 1
+                            break
+            self.select_all_albums_checkbox.setChecked(checked_count == total_count)
+
+        # Re-enable signals
+        self.select_all_albums_checkbox.blockSignals(False)
+
     def create_album_grid_item(self, album):
         """Create a grid item widget for an album."""
         widget = QWidget()
         current_size = self.size_slider.value()
         widget.setFixedSize(current_size, current_size + 40)  # Add space for text
+        widget.setCursor(Qt.PointingHandCursor)  # Show pointer cursor on hover
 
         # Set tooltip for the entire widget
         tooltip_text = f"Album: {album['albumName']}\nAssets: {album['assetCount']}"
@@ -503,7 +608,7 @@ class ExportComponent(QWidget, ExportMethods):
                 self.thumbnail_loader.add_to_queue(asset_id)
 
         # Checkbox and name
-        checkbox = QCheckBox(f"{album['albumName']}")
+        checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
         checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
         checkbox.setStyleSheet("""
             QCheckBox {
@@ -513,6 +618,7 @@ class ExportComponent(QWidget, ExportMethods):
         """)
         # Set tooltip on checkbox too
         checkbox.setToolTip(tooltip_text)
+        checkbox.stateChanged.connect(self.update_select_all_state)  # Connect state change
         layout.addWidget(checkbox)
 
         # Asset count
@@ -523,10 +629,23 @@ class ExportComponent(QWidget, ExportMethods):
         """)
         layout.addWidget(count_label)
 
+        # Make the whole widget clickable
+        def mouseReleaseEvent(event):
+            if event.button() == Qt.LeftButton:
+                checkbox.setChecked(not checkbox.isChecked())
+            event.accept()
+        widget.mouseReleaseEvent = mouseReleaseEvent
+
         return widget, checkbox
 
     def create_album_list_item(self, album):
         """Create a list item widget for an album."""
+        widget = QWidget()
+        widget.setCursor(Qt.PointingHandCursor)  # Show pointer cursor on hover
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
+
         checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
         checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
         checkbox.setStyleSheet("""
@@ -536,7 +655,17 @@ class ExportComponent(QWidget, ExportMethods):
                 spacing: 0;
             }
         """)
-        return checkbox
+        checkbox.stateChanged.connect(self.update_select_all_state)  # Connect state change
+        layout.addWidget(checkbox)
+
+        # Make the whole widget clickable
+        def mouseReleaseEvent(event):
+            if event.button() == Qt.LeftButton:
+                checkbox.setChecked(not checkbox.isChecked())
+            event.accept()
+        widget.mouseReleaseEvent = mouseReleaseEvent
+
+        return widget
 
     def populate_albums_list(self, albums_to_show):
         """Helper method to populate the albums list with given albums."""
@@ -558,9 +687,9 @@ class ExportComponent(QWidget, ExportMethods):
         else:
             # Populate list view
             for album in albums_to_show:
-                checkbox = self.create_album_list_item(album)
-                self.album_widgets.append(checkbox)
-                self.albums_list_layout.addWidget(checkbox)
+                widget = self.create_album_list_item(album)
+                self.album_widgets.append(widget)
+                self.albums_list_layout.addWidget(widget)
             self.albums_list_layout.addStretch()
             self.list_view_widget.show()
             self.grid_view_widget.hide()
@@ -596,8 +725,17 @@ class ExportComponent(QWidget, ExportMethods):
         # Handle list view
         for i in range(self.albums_list_layout.count()):
             item = self.albums_list_layout.itemAt(i)
-            if item and isinstance(item.widget(), QCheckBox):
-                item.widget().setChecked(is_checked)
+            if item and item.widget():
+                # Find checkbox in the list item's layout
+                list_item = item.widget()
+                for j in range(list_item.layout().count()):
+                    widget = list_item.layout().itemAt(j).widget()
+                    if isinstance(widget, QCheckBox):
+                        # Block signals temporarily
+                        widget.blockSignals(True)
+                        widget.setChecked(is_checked)
+                        widget.blockSignals(False)
+                        break
 
         # Handle grid view
         for i in range(self.albums_grid_layout.count()):
@@ -608,8 +746,14 @@ class ExportComponent(QWidget, ExportMethods):
                 for j in range(grid_item.layout().count()):
                     widget = grid_item.layout().itemAt(j).widget()
                     if isinstance(widget, QCheckBox):
+                        # Block signals temporarily
+                        widget.blockSignals(True)
                         widget.setChecked(is_checked)
+                        widget.blockSignals(False)
                         break
+
+        # Update the select all state after all changes
+        self.update_select_all_state()
 
     def get_selected_albums(self):
         """Get selected albums from either view."""
@@ -624,19 +768,31 @@ class ExportComponent(QWidget, ExportMethods):
                     grid_item = item.widget()
                     for j in range(grid_item.layout().count()):
                         widget = grid_item.layout().itemAt(j).widget()
-                        if isinstance(widget, QCheckBox) and widget.isChecked():
-                            album = self.albums[i]
-                            selected_albums.append(album)
+                        if isinstance(widget, QCheckBox):
+                            if widget.isChecked():
+                                album_name = widget.text().split(" (")[0]  # Extract album name without count
+                                # Find album by name
+                                album = next((a for a in self.albums if a['albumName'] == album_name), None)
+                                if album:
+                                    selected_albums.append(album)
                             break
         else:
             # Get from list view
             for i in range(self.albums_list_layout.count()):
                 item = self.albums_list_layout.itemAt(i)
-                if item and isinstance(item.widget(), QCheckBox):
-                    checkbox = item.widget()
-                    if checkbox.isChecked():
-                        album = self.albums[i]
-                        selected_albums.append(album)
+                if item and item.widget():
+                    list_item = item.widget()
+                    for j in range(list_item.layout().count()):
+                        widget = list_item.layout().itemAt(j).widget()
+                        if isinstance(widget, QCheckBox):
+                            if widget.isChecked():
+                                album_name = widget.text().split(" (")[0]  # Extract album name without count
+                                # Find album by name
+                                album = next((a for a in self.albums if a['albumName'] == album_name), None)
+                                if album:
+                                    selected_albums.append(album)
+                            break
+
 
         return selected_albums
 
