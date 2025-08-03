@@ -9,7 +9,29 @@ on:
   workflow_dispatch: # Allow manual trigger
 
 jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          pip install --no-cache-dir -r requirements.txt
+      - name: Make scripts executable
+        run: |
+          chmod +x scripts/*.sh
+      - name: Run tests
+        run: |
+          ./scripts/run-tests.sh
+
   build:
+    needs: test
     name: Build ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
