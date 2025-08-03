@@ -697,20 +697,57 @@ class ExportComponent(QWidget, ExportMethods):
         if self.logger:
             self.logger.append(f"Total items to process: {len(selected_items)}")
 
+        export_completed = False
         if main_area.objectName() == "albums_main_area":
-            self.export_albums(main_area, selected_items)
+            export_completed = self.export_albums(main_area, selected_items)
         else:
             self.export_buckets(main_area, selected_items)
+            export_completed = True  # Timeline export handles its own completion
 
-        if self.login_manager.is_logged_in():
+        if self.login_manager.is_logged_in() and export_completed:
             self.finalize_export(main_area)
 
     def export_albums(self, main_area: QWidget, selected_items):
+        archive_size_bytes = self.get_archive_size_in_bytes()
+
         for i, album in enumerate(selected_items, start=1):
-            result = self.download_and_save_archive(main_area,album["assets"], album["albumName"], self.get_archive_size_in_bytes(), album_id=album["id"])
-            if result == "completed":
-                self.update_progress_bar(main_area, i, len(selected_items))
-                QApplication.processEvents()
+            if self.stop_flag():
+                # Save current state for resume
+                self.save_export_state(selected_items, None, archive_size_bytes, "Albums", i - 1)
+                if self.logger:
+                    self.logger.append("Export paused by user.")
+                self.show_resume_button(main_area)
+                return False
+
+            if self.logger:
+                self.logger.append(f"Processing album {i}/{len(selected_items)}: {album['albumName']}")
+
+            try:
+                result = self.download_and_save_archive(main_area, album["assets"], album["albumName"], archive_size_bytes, album_id=album["id"])
+                if result == "paused":
+                    # Save state and show resume button
+                    self.save_export_state(selected_items, None, archive_size_bytes, "Albums", i - 1)
+                    self.show_resume_button(main_area)
+                    return False
+                elif result == "cancelled":
+                    if self.logger:
+                        self.logger.append("Export cancelled by user.")
+                    return False
+                elif result == "completed":
+                    self.update_progress_bar(main_area, i, len(selected_items))
+                    QApplication.processEvents()
+                else:
+                    if self.logger:
+                        self.logger.append(f"Error exporting album: {album['albumName']}")
+                    return False
+            except Exception as e:
+                if self.logger:
+                    self.logger.append(f"Error processing album {album['albumName']}: {str(e)}")
+                return False
+
+        # Clear paused state on successful completion
+        self.paused_export_state = None
+        return True
 
     def export_buckets(self, main_area: QWidget, selected_buckets):
         inputs = self.get_user_input_values()
@@ -908,11 +945,11 @@ class ExportComponent(QWidget, ExportMethods):
 
         # Resume from where we left off
         state = self.paused_export_state
-        selected_buckets = state['selected_buckets']
+        selected_items = state['selected_buckets']  # For albums, this contains album list
         inputs = state['inputs']
         archive_size_bytes = state['archive_size_bytes']
         download_option = state['download_option']
-        current_bucket_index = state.get('current_bucket_index', 0)
+        current_index = state.get('current_bucket_index', 0)
 
         # Update export manager with correct output directory
         self.export_manager = ExportManager(self.login_manager, self.logger, main_area.output_dir, self.stop_flag)
@@ -920,18 +957,29 @@ class ExportComponent(QWidget, ExportMethods):
         # Check if server supports Range headers and hide resume button if not
         self.check_and_hide_resume_button_if_needed(main_area)
 
-        if self.logger:
-            self.logger.append(f"Resuming from bucket {current_bucket_index + 1}/{len(selected_buckets)}")
+        if download_option == "Albums":
+            # Resume album export
+            if self.logger:
+                self.logger.append(f"Resuming from album {current_index + 1}/{len(selected_items)}")
+            self.setup_progress_bar(main_area, len(selected_items))
+            self.update_progress_bar(main_area, current_index, len(selected_items))
 
-        if download_option.startswith("Per"):
-            self.process_buckets_individually_resume(main_area, selected_buckets, inputs, archive_size_bytes, current_bucket_index)
-        elif download_option == "Single Archive":
-            # For single archive, we resume by retrying the download
-            self.process_all_buckets_combined(main_area, selected_buckets, inputs, archive_size_bytes)
+            # Start export from the last album that was being processed
+            remaining_albums = selected_items[current_index:]
+            export_completed = self.export_albums(main_area, remaining_albums)
+            if export_completed and self.login_manager.is_logged_in():
+                self.finalize_export(main_area)
+        else:
+            # Resume timeline export
+            if self.logger:
+                self.logger.append(f"Resuming from bucket {current_index + 1}/{len(selected_items)}")
+            if download_option.startswith("Per"):
+                self.process_buckets_individually_resume(main_area, selected_items, inputs, archive_size_bytes, current_index)
+            elif download_option == "Single Archive":
+                # For single archive, we resume by retrying the download
+                self.process_all_buckets_combined(main_area, selected_items, inputs, archive_size_bytes)
 
-        # Only finalize if not paused
-        if not self.paused_export_state and self.login_manager.is_logged_in():
-            self.finalize_export(main_area)
+
 
     def process_buckets_individually_resume(self, main_area: QWidget, selected_buckets, inputs, archive_size_bytes, start_index=0):
         """Process buckets individually starting from a specific index for resume."""
