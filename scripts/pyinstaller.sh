@@ -36,7 +36,7 @@ $PYINSTALLER \
   --windowed \
   --optimize "2" \
   --icon="src/resources/favicon-180.png" \
-  --add-data "src/resources/*:src/resources" \
+  --add-data "src/resources:src/resources" \
   --add-data "version.txt:." \
   --paths="src" \
   --name "ArchImmich" \
