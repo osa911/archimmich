@@ -113,6 +113,8 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write # This gives permission to create releases and upload assets
 
     steps:
       - name: Download all artifacts
