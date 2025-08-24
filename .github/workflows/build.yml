@@ -36,25 +36,29 @@ jobs:
   build:
     needs: test
     name: Build ${{ matrix.os }}-${{ matrix.arch }}
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false # Don't cancel other jobs if one fails
       matrix:
         include:
           - os: ubuntu-latest
             arch: x64
+            runner: ubuntu-latest
             artifact_name: ArchImmich-linux-x64
             build_script: ./scripts/build-linux.sh
           - os: ubuntu-latest
             arch: arm64
+            runner: ubuntu-arm64
             artifact_name: ArchImmich-linux-arm64
             build_script: ./scripts/build-linux.sh
           - os: windows-latest
             arch: x64
+            runner: windows-latest
             artifact_name: ArchImmich-windows
             build_script: scripts\build-windows.bat
           - os: macos-latest
             arch: arm64
+            runner: macos-latest
             artifact_name: ArchImmich-macos
             build_script: ./scripts/build-macos.sh
 

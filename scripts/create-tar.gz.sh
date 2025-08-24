@@ -49,6 +49,16 @@ tar -czf "$TARBALL" -C dist ArchImmich
 # Verify the tarball was created
 if [ -f "$TARBALL" ]; then
     echo "Successfully created: $TARBALL"
+
+    # Log checksum and architecture info
+    echo "=== Build Verification ==="
+    echo "Target architecture: $ARCH"
+    echo "System architecture: $(uname -m)"
+    echo "Binary architecture: $(file dist/ArchImmich/ArchImmich | grep -o 'ARM aarch64\|x86-64\|Intel 80386' || echo 'unknown')"
+    echo "Binary checksum: $(shasum -a 256 dist/ArchImmich/ArchImmich | cut -d' ' -f1)"
+    echo "Tarball checksum: $(shasum -a 256 "$TARBALL" | cut -d' ' -f1)"
+    echo "Tarball size: $(ls -lh "$TARBALL" | awk '{print $5}')"
+    echo "=========================="
 else
     echo "Error: Failed to create tarball"
     exit 1
