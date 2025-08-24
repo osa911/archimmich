@@ -35,20 +35,26 @@ jobs:
 
   build:
     needs: test
-    name: Build ${{ matrix.os }}
+    name: Build ${{ matrix.os }}-${{ matrix.arch }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false # Don't cancel other jobs if one fails
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
         include:
           - os: ubuntu-latest
-            artifact_name: ArchImmich-linux
+            arch: x64
+            artifact_name: ArchImmich-linux-x64
+            build_script: ./scripts/build-linux.sh
+          - os: ubuntu-latest
+            arch: arm64
+            artifact_name: ArchImmich-linux-arm64
             build_script: ./scripts/build-linux.sh
           - os: windows-latest
+            arch: x64
             artifact_name: ArchImmich-windows
             build_script: scripts\build-windows.bat
           - os: macos-latest
+            arch: x64
             artifact_name: ArchImmich-macos
             build_script: ./scripts/build-macos.sh
 
@@ -101,6 +107,7 @@ jobs:
         shell: bash
         env:
           GITHUB_WORKSPACE: ${{ github.workspace }}
+          TARGET_ARCH: ${{ matrix.arch }}
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
