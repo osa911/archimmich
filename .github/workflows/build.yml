@@ -48,7 +48,7 @@ jobs:
             build_script: ./scripts/build-linux.sh
           - os: ubuntu-latest
             arch: arm64
-            runner: ubuntu-arm64
+            runner: ubuntu-22.04-arm
             artifact_name: ArchImmich-linux-arm64
             build_script: ./scripts/build-linux.sh
           - os: windows-latest
