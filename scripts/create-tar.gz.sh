@@ -21,8 +21,20 @@ if [ ! -d "dist/ArchImmich" ]; then
     exit 1
 fi
 
-# Set the output filename
-TARBALL="release/ArchImmich_Linux_v${VERSION}.tar.gz"
+# Get architecture from environment or detect it
+if [ -n "$TARGET_ARCH" ]; then
+    ARCH="$TARGET_ARCH"
+else
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+        ARCH="arm64"
+    else
+        ARCH="x64"
+    fi
+fi
+
+# Set the output filename with architecture
+TARBALL="release/ArchImmich_Linux_${ARCH}_v${VERSION}.tar.gz"
 
 # Remove existing tarball if it exists
 if [ -f "$TARBALL" ]; then
@@ -31,7 +43,7 @@ if [ -f "$TARBALL" ]; then
 fi
 
 # Create a tarball with the version included in the filename
-echo "Creating Linux tarball..."
+echo "Creating Linux ${ARCH} tarball..."
 tar -czf "$TARBALL" -C dist ArchImmich
 
 # Verify the tarball was created
