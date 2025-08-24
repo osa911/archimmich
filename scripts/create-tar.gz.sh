@@ -21,8 +21,20 @@ if [ ! -d "dist/ArchImmich" ]; then
     exit 1
 fi
 
-# Set the output filename
-TARBALL="release/ArchImmich_Linux_v${VERSION}.tar.gz"
+# Get architecture from environment or detect it
+if [ -n "$TARGET_ARCH" ]; then
+    ARCH="$TARGET_ARCH"
+else
+    ARCH=$(uname -m)
+    if [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+        ARCH="arm64"
+    else
+        ARCH="x64"
+    fi
+fi
+
+# Set the output filename with architecture
+TARBALL="release/ArchImmich_Linux_${ARCH}_v${VERSION}.tar.gz"
 
 # Remove existing tarball if it exists
 if [ -f "$TARBALL" ]; then
@@ -31,12 +43,22 @@ if [ -f "$TARBALL" ]; then
 fi
 
 # Create a tarball with the version included in the filename
-echo "Creating Linux tarball..."
+echo "Creating Linux ${ARCH} tarball..."
 tar -czf "$TARBALL" -C dist ArchImmich
 
 # Verify the tarball was created
 if [ -f "$TARBALL" ]; then
     echo "Successfully created: $TARBALL"
+
+    # Log checksum and architecture info
+    echo "=== Build Verification ==="
+    echo "Target architecture: $ARCH"
+    echo "System architecture: $(uname -m)"
+    echo "Binary architecture: $(file dist/ArchImmich/ArchImmich | grep -o 'ARM aarch64\|x86-64\|Intel 80386' || echo 'unknown')"
+    echo "Binary checksum: $(shasum -a 256 dist/ArchImmich/ArchImmich | cut -d' ' -f1)"
+    echo "Tarball checksum: $(shasum -a 256 "$TARBALL" | cut -d' ' -f1)"
+    echo "Tarball size: $(ls -lh "$TARBALL" | awk '{print $5}')"
+    echo "=========================="
 else
     echo "Error: Failed to create tarball"
     exit 1

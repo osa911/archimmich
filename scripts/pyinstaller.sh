@@ -1,5 +1,22 @@
 #!/bin/sh
 
+# Detect target architecture from environment or system
+if [ -n "$TARGET_ARCH" ]; then
+    echo "Using target architecture: $TARGET_ARCH"
+elif [ "$(uname -m)" = "x86_64" ]; then
+    TARGET_ARCH="x86_64"
+    echo "Detected x86_64 architecture"
+elif [ "$(uname -m)" = "aarch64" ] || [ "$(uname -m)" = "arm64" ]; then
+    TARGET_ARCH="aarch64"
+    echo "Detected ARM64 architecture"
+else
+    TARGET_ARCH="x86_64"  # Default to x86_64 for compatibility
+    echo "Defaulting to x86_64 architecture"
+fi
+
+# Export TARGET_ARCH for PyInstaller to use
+export TARGET_ARCH
+
 # Add platform-specific options
 case "$(uname)" in
   "Darwin")
@@ -30,6 +47,10 @@ fi
 
 # Clean previous builds
 rm -rf build dist
+
+echo "Building for architecture: $TARGET_ARCH"
+echo "PyInstaller command: $PYINSTALLER"
+echo "Platform options: $PLATFORM_OPTS"
 
 $PYINSTALLER \
   --onedir \

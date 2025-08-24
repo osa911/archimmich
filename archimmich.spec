@@ -1,8 +1,12 @@
 # -*- mode: python ; coding: utf-8 -*-
 from PyInstaller.utils.hooks import collect_dynamic_libs
 from PyInstaller.utils.hooks import collect_all
+import os
 
-datas = [('src/resources', 'src/resources')]
+# Get target architecture from environment or default to x86_64
+TARGET_ARCH = os.environ.get('TARGET_ARCH', 'x86_64')
+
+datas = [('src/resources/*', 'src/resources')]
 binaries = []
 hiddenimports = []
 binaries += collect_dynamic_libs('_internal')
@@ -40,7 +44,7 @@ exe = EXE(
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch=None,
+    target_arch=TARGET_ARCH,
     codesign_identity=None,
     entitlements_file=None,
     icon=['src\\resources\\favicon-180.png'],
