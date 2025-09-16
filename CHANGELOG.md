@@ -2,6 +2,61 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.0] - Cloud Storage Integration - 2024-12-16
+
+### ☁️ **Export Directly to Cloud Storage**
+
+Now you can export your Immich photos and albums directly to your cloud storage without using local disk space!
+
+**Supported Cloud Providers:**
+
+- **WebDAV Services**: Nextcloud, ownCloud, Synology, QNAP, and more
+- **S3-Compatible Storage**: AWS S3, MinIO, DigitalOcean Spaces, Wasabi, Backblaze B2
+
+### 🆕 **New Features**
+
+#### **Cloud Export Mode**
+
+- Switch to "Cloud Export" on the Timeline tab to upload directly to your cloud storage
+- No more filling up your local disk with large export files
+- Perfect for backing up huge photo collections
+
+#### **Multiple Cloud Configurations**
+
+- Save multiple cloud storage accounts and easily switch between them
+- Give each configuration a friendly name (e.g., "Personal Nextcloud", "Work S3")
+- Edit, rename, or delete saved configurations anytime
+
+#### **Real-Time Progress**
+
+- Watch your uploads progress with live speed indicators (MB/s)
+- See exactly how much has been uploaded and time remaining
+- Same smooth progress experience as local exports
+
+#### **Secure & Easy Setup**
+
+- Test your cloud connection before saving to make sure everything works
+- All passwords and access keys are encrypted and stored securely
+- Simple setup wizard guides you through configuration
+
+### 🚀 **Getting Started**
+
+1. **Go to Timeline tab** and click the cloud button to switch to Cloud Export
+2. **Add your cloud storage** by clicking the "+" button and entering your details
+3. **Test the connection** to make sure everything works
+4. **Start exporting** - your files will upload directly to the cloud!
+
+### 📱 **Perfect For**
+
+- **Large photo libraries** that would fill up your computer
+- **Regular backups** to multiple cloud services
+- **Sharing exports** by uploading to shared cloud folders
+- **Long-term archival** without local storage concerns
+
+---
+
+_For technical documentation, see [CLOUD_STORAGE.md](CLOUD_STORAGE.md)_
+
 ## [0.2.0] - 2025-08-03
 
 ### Added
