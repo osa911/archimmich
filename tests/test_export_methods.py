@@ -15,6 +15,7 @@ class MockExportMethodsWidget(QWidget, ExportMethods):
         super().__init__()
         self.logger = MagicMock()
         self.export_in_progress = False
+        self.export_manager = MagicMock()
 
         # Create tab widget
         self.tab_widget = QTabWidget()

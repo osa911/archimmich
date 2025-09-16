@@ -1,6 +1,8 @@
 altgraph==0.17.4
+boto3==1.35.69
 certifi==2024.12.14
 charset-normalizer==3.4.0
+cryptography==42.0.8
 idna==3.10
 iniconfig==2.0.0
 macholib==1.16.3
