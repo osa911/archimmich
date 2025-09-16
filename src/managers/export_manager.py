@@ -42,6 +42,7 @@ class ExportManager:
         url = (
             f"/timeline/buckets"
             f"?isArchived={str(is_archived).lower()}"
+            f"&size=MONTH" # this is for backward compatibility with old immich API (server version < v1.133.0)
             f"&withPartners={str(with_partners).lower()}"
             f"&withStacked={str(with_stacked).lower()}"
             f"&isFavorite={str(is_favorite).lower()}"
@@ -121,6 +122,7 @@ class ExportManager:
         url = (
             f"/timeline/bucket"
             f"?isArchived={str(is_archived).lower()}"
+            f"&size=MONTH" # this is for backward compatibility with old immich API (server version < v1.133.0)
             f"&withPartners={str(with_partners).lower()}"
             f"&withStacked={str(with_stacked).lower()}"
             f"&timeBucket={time_bucket}"
@@ -659,7 +661,7 @@ class ExportManager:
 
                                 QApplication.processEvents()
 
-                    # Download completed successfully
+                        # Download completed successfully
                         if not self.stop_flag() and self.login_manager.is_logged_in():
                             current_download_progress_bar.setValue(100)
                             current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - 100%")
