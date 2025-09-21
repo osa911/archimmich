@@ -328,9 +328,8 @@ class ExportComponent(QWidget, ExportMethods):
         self.select_all_albums_checkbox = QCheckBox("Select All")
         self.select_all_albums_checkbox.setStyleSheet("""
             QCheckBox {
-                margin: 0;
                 padding: 4px 0;
-                spacing: 0;
+                spacing: 5px;
             }
         """)
         # Connect after setting up the checkbox to avoid initial signal
@@ -713,15 +712,14 @@ class ExportComponent(QWidget, ExportMethods):
         widget.setCursor(Qt.PointingHandCursor)  # Show pointer cursor on hover
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(5)
 
         checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
         checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
         checkbox.setStyleSheet("""
             QCheckBox {
-                margin: 0;
                 padding: 4px 0;
-                spacing: 0;
+                spacing: 5px;
             }
         """)
         checkbox.stateChanged.connect(self.update_select_all_state)  # Connect state change
