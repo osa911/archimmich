@@ -49,9 +49,9 @@ class MainWindow(QMainWindow):
         self.setMinimumWidth(MIN_WINDOW_WIDTH)
         self.setMinimumHeight(MIN_WINDOW_HEIGHT)
 
-        # Set maximum height to 100% of screen height
-        max_height = int(screen_geometry.height() * 1)
-        self.setMaximumHeight(max_height)
+        # Enable window maximization by removing maximum height restriction
+        # and ensuring proper window flags are set
+        self.setWindowFlags(Qt.Window | Qt.WindowMinimizeButtonHint | Qt.WindowMaximizeButtonHint | Qt.WindowCloseButtonHint)
 
         # Create a scroll area for the main content
         from PyQt5.QtWidgets import QScrollArea
