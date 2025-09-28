@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [v0.3.0] - Cloud Storage Integration - 2024-12-16
+## [v0.3.0] - Cloud Storage Integration - 2025-09-28
 
 ### ☁️ **Export Directly to Cloud Storage**
 
