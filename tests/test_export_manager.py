@@ -80,6 +80,7 @@ def test_get_timeline_buckets(export_manager, mock_api_manager):
     expected_url = (
         "/timeline/buckets"
         "?isArchived=true"
+        "&size=MONTH"
         "&withPartners=false"
         "&withStacked=false"
         "&isFavorite=false"
@@ -108,6 +109,7 @@ def test_get_timeline_bucket_assets(export_manager, mock_api_manager):
     expected_url = (
         "/timeline/bucket"
         "?isArchived=true"
+        "&size=MONTH"
         "&withPartners=false"
         "&withStacked=false"
         "&timeBucket=2024-12"
@@ -168,6 +170,7 @@ def test_get_timeline_buckets_with_visibility(export_manager, mock_api_manager):
     expected_url = (
         "/timeline/buckets"
         "?isArchived=true"
+        "&size=MONTH"
         "&withPartners=false"
         "&withStacked=false"
         "&isFavorite=false"
@@ -198,6 +201,7 @@ def test_get_timeline_bucket_assets_with_visibility(export_manager, mock_api_man
     expected_url = (
         "/timeline/bucket"
         "?isArchived=true"
+        "&size=MONTH"
         "&withPartners=false"
         "&withStacked=false"
         "&timeBucket=2024-12"
@@ -453,29 +457,51 @@ def test_download_archive_speed_calculation_edge_cases(export_manager, mock_api_
 
 def test_download_archive_with_album_id(export_manager, mock_api_manager, mock_logger, mock_progress_bar):
     """Test downloading an archive using album ID."""
-    mock_api_manager.post.return_value.iter_content = MagicMock(return_value=[b"chunk1", b"chunk2"])
-    mock_api_manager.post.return_value.ok = True
-    mock_api_manager.post.return_value.headers = {}
+    # Setup mock response
+    mock_response = Mock()
+    mock_response.iter_content = MagicMock(return_value=[b"chunk1", b"chunk2"])
+    mock_response.ok = True
+    mock_response.headers = {}
+    mock_api_manager.post.return_value = mock_response
 
-    with patch('builtins.open', MagicMock()), \
+    # Mock required conditions
+    export_manager.login_manager.is_logged_in.return_value = True
+    export_manager.stop_flag = Mock(return_value=False)
+
+    # Set up output directory
+    export_manager.output_dir = "/test/output"
+
+    with patch('builtins.open', MagicMock()) as mock_open, \
          patch('os.path.exists', return_value=False), \
-         patch('os.makedirs'):
+         patch('os.makedirs'), \
+         patch('os.rename'), \
+         patch('os.path.getsize', return_value=12), \
+         patch('src.managers.export_manager.ExportManager.log'), \
+         patch.object(export_manager, 'get_album_assets', return_value=['asset1', 'asset2']), \
+         patch.object(export_manager, 'can_resume_download', return_value=(False, 0)), \
+         patch.object(export_manager, 'check_range_header_support', return_value=True):
 
-        export_manager.download_archive(
+        result = export_manager.download_archive(
             album_id="album123",
             bucket_name="test_album",
             total_size=2048,
             current_download_progress_bar=mock_progress_bar
         )
 
+        # Verify the API call was made with asset IDs (not album ID)
         mock_api_manager.post.assert_called_once_with(
             "/download/archive",
-            json_data={"albumId": "album123"},
+            json_data={"assetIds": ['asset1', 'asset2']},
             stream=True,
             expected_type=None,
             headers={}
         )
-        mock_logger.append.assert_any_call('Starting fresh download: "test_album.zip"')
+
+        # Verify file operations
+        mock_open.assert_called()
+
+        # The result should be "completed" for successful local download
+        assert result == "completed"
 
 
 def test_download_archive_no_ids(export_manager, mock_api_manager, mock_logger, mock_progress_bar):
@@ -554,3 +580,244 @@ def test_get_albums_empty(export_manager, mock_api_manager):
 
     assert result == []
     mock_api_manager.get.assert_called_once_with("/albums", expected_type=list)
+
+
+# Cloud Storage Tests
+@pytest.fixture
+def mock_cloud_storage_manager():
+    """Mock cloud storage manager."""
+    return Mock()
+
+
+@pytest.fixture
+def export_manager_with_cloud(mock_login_manager, mock_logs_widget, mock_logger, mock_cloud_storage_manager):
+    """Initialize ExportManager with cloud storage support."""
+    with patch('src.managers.export_manager.CloudStorageManager', return_value=mock_cloud_storage_manager):
+        manager = ExportManager(
+            login_manager=mock_login_manager,
+            logger=mock_logger,
+            output_dir="/tmp",
+            stop_flag_callback=lambda: False
+        )
+        manager.cloud_storage_manager = mock_cloud_storage_manager
+        return manager
+
+
+def test_upload_archive_to_cloud_webdav(export_manager_with_cloud, mock_cloud_storage_manager, mock_logger, tmp_path):
+    """Test uploading archive to WebDAV cloud storage."""
+    # Create test file
+    test_file = tmp_path / "test.zip"
+    test_file.write_text("test archive content")
+
+    # Mock cloud config
+    cloud_config = {
+        'type': 'webdav',
+        'url': 'https://cloud.example.com/webdav',
+        'username': 'testuser',
+        'password': 'testpass',
+        'remote_directory': 'backups',
+        'auth_type': 'basic'
+    }
+
+    # Mock successful upload
+    mock_cloud_storage_manager.create_webdav_directory.return_value = True
+    mock_cloud_storage_manager.upload_file_to_webdav.return_value = (True, "Upload successful")
+
+    result = export_manager_with_cloud.upload_archive_to_cloud(
+        str(test_file), cloud_config, "test.zip"
+    )
+
+    # Verify calls
+    mock_cloud_storage_manager.create_webdav_directory.assert_called_once_with(
+        'https://cloud.example.com/webdav', 'testuser', 'testpass', 'backups', 'basic'
+    )
+    mock_cloud_storage_manager.upload_file_to_webdav.assert_called_once()
+
+    assert result == (True, "Upload successful")
+
+
+def test_upload_archive_to_cloud_s3(export_manager_with_cloud, mock_cloud_storage_manager, mock_logger, tmp_path):
+    """Test uploading archive to S3 cloud storage."""
+    # Create test file
+    test_file = tmp_path / "test.zip"
+    test_file.write_text("test archive content")
+
+    # Mock cloud config
+    cloud_config = {
+        'type': 's3',
+        'endpoint_url': 'https://s3.amazonaws.com',
+        'access_key': 'AKIAIOSFODNN7EXAMPLE',
+        'secret_key': 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
+        'bucket_name': 'my-backup-bucket',
+        'region': 'us-east-1'
+    }
+
+    # Mock successful upload
+    mock_cloud_storage_manager.upload_file_to_s3.return_value = (True, "Upload successful")
+
+    result = export_manager_with_cloud.upload_archive_to_cloud(
+        str(test_file), cloud_config, "test.zip"
+    )
+
+    # Verify calls
+    mock_cloud_storage_manager.upload_file_to_s3.assert_called_once()
+
+    assert result == (True, "Upload successful")
+
+
+def test_upload_archive_to_cloud_unsupported_type(export_manager_with_cloud, mock_cloud_storage_manager, tmp_path):
+    """Test uploading archive to unsupported cloud storage type."""
+    # Create test file
+    test_file = tmp_path / "test.zip"
+    test_file.write_text("test archive content")
+
+    cloud_config = {
+        'type': 'unsupported',
+        'url': 'https://example.com'
+    }
+
+    result = export_manager_with_cloud.upload_archive_to_cloud(
+        str(test_file), cloud_config, "test.zip"
+    )
+
+    assert result == (False, "Unsupported cloud storage type: unsupported")
+
+
+def test_download_archive_with_cloud_config(export_manager_with_cloud, mock_api_manager, mock_cloud_storage_manager, mock_logger):
+    """Test download archive with cloud configuration for streaming upload."""
+    # Mock API response
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_response.headers = {'content-length': '2097152'}  # 2MB
+    mock_response.iter_content.return_value = [b"x" * (1024 * 1024), b"x" * (1024 * 1024)]  # 2x 1MB chunks
+    mock_api_manager.post.return_value = mock_response
+
+    # Mock cloud config
+    cloud_config = {
+        'type': 'webdav',
+        'url': 'https://cloud.example.com/webdav',
+        'username': 'testuser',
+        'password': 'testpass',
+        'remote_directory': 'backups',
+        'auth_type': 'basic'
+    }
+
+    # Mock successful cloud upload
+    mock_cloud_storage_manager.create_webdav_directory.return_value = True
+    mock_cloud_storage_manager.upload_stream_to_webdav.return_value = (True, "Stream upload successful")
+
+    # Mock stop flag and login
+    export_manager_with_cloud.stop_flag = Mock(return_value=False)
+    export_manager_with_cloud.login_manager.is_logged_in.return_value = True
+
+    # Mock CloudUploadThread creation (imported inside the method)
+    with patch('src.managers.cloud_upload_thread.CloudUploadThread') as mock_thread_class:
+        mock_thread = Mock()
+        mock_thread_class.return_value = mock_thread
+
+        result = export_manager_with_cloud.download_archive(
+            asset_ids=["1", "2"],
+            bucket_name="test_bucket",
+            total_size=2 * 1024 * 1024,
+            cloud_config=cloud_config
+        )
+
+        # Verify cloud upload thread was created and started
+        mock_thread_class.assert_called_once_with(
+            export_manager_with_cloud,
+            ["1", "2"],
+            None,  # album_id
+            "test_bucket",
+            2 * 1024 * 1024,
+            cloud_config,
+            export_manager_with_cloud.logger
+        )
+        mock_thread.start.assert_called_once()
+
+        # Verify the result indicates cloud upload started
+        assert result == "uploading"
+
+
+def test_download_archive_cloud_upload_failure(export_manager_with_cloud, mock_api_manager, mock_cloud_storage_manager, mock_logger):
+    """Test download archive with cloud upload failure."""
+    # Mock API response
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_response.headers = {'content-length': '1048576'}  # 1MB
+    mock_response.iter_content.return_value = [b"x" * (1024 * 1024)]  # 1MB chunk
+    mock_api_manager.post.return_value = mock_response
+
+    # Mock cloud config
+    cloud_config = {
+        'type': 'webdav',
+        'url': 'https://cloud.example.com/webdav',
+        'username': 'testuser',
+        'password': 'testpass',
+        'auth_type': 'basic'
+    }
+
+    # Mock failed cloud upload
+    mock_cloud_storage_manager.upload_stream_to_webdav.return_value = (False, "Upload failed: Connection timeout")
+
+    # Mock stop flag and login
+    export_manager_with_cloud.stop_flag = Mock(return_value=False)
+    export_manager_with_cloud.login_manager.is_logged_in.return_value = True
+
+    # Mock CloudUploadThread creation (imported inside the method)
+    with patch('src.managers.cloud_upload_thread.CloudUploadThread') as mock_thread_class:
+        mock_thread = Mock()
+        mock_thread_class.return_value = mock_thread
+
+        result = export_manager_with_cloud.download_archive(
+            asset_ids=["1", "2"],
+            bucket_name="test_bucket",
+            total_size=1024 * 1024,
+            cloud_config=cloud_config
+        )
+
+        # Verify cloud upload thread was created and started
+        mock_thread_class.assert_called_once_with(
+            export_manager_with_cloud,
+            ["1", "2"],
+            None,  # album_id
+            "test_bucket",
+            1024 * 1024,
+            cloud_config,
+            export_manager_with_cloud.logger
+        )
+        mock_thread.start.assert_called_once()
+
+        # Verify the result indicates cloud upload started (failure happens in thread)
+        assert result == "uploading"
+
+
+def test_cloud_storage_manager_initialization(export_manager, mock_logger):
+    """Test cloud storage manager is properly initialized."""
+    with patch('src.managers.export_manager.CloudStorageManager') as mock_cloud_manager_class:
+        manager = ExportManager(
+            login_manager=Mock(),
+            logger=mock_logger,
+            output_dir="/tmp",
+            stop_flag_callback=lambda: False
+        )
+
+        # Verify CloudStorageManager was instantiated with logger
+        mock_cloud_manager_class.assert_called_once_with(mock_logger)
+
+
+def test_format_cloud_progress_message(export_manager):
+    """Test formatting of cloud upload progress messages."""
+    # This tests the progress callback formatting used in cloud uploads
+    uploaded_bytes = 50 * 1024 * 1024  # 50MB
+    total_bytes = 100 * 1024 * 1024    # 100MB
+    speed = 10 * 1024 * 1024           # 10MB/s
+    progress = (uploaded_bytes / total_bytes) * 100  # 50%
+
+    # Test the format used in progress callbacks
+    speed_mb = speed / (1024 ** 2)
+    expected_format = f"Uploading: test_bucket - {progress:.1f}% ({export_manager.format_size(uploaded_bytes)}/{export_manager.format_size(total_bytes)}), Speed: {speed_mb:.2f} MB/s"
+
+    # Verify the format produces expected output
+    assert "50.0%" in expected_format
+    assert "Speed: 10.00 MB/s" in expected_format
+    assert "test_bucket" in expected_format

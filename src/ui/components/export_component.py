@@ -1,7 +1,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, QCheckBox,
     QPushButton, QProgressBar, QScrollArea, QApplication, QRadioButton, QButtonGroup, QTabWidget,
-    QSlider
+    QSlider, QComboBox
 )
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import (QIntValidator, QIcon)
@@ -12,7 +12,10 @@ from src.ui.components.divider_factory import HorizontalDivider, VerticalDivider
 from src.ui.components.thumbnail_loader import ThumbnailLoader
 from src.ui.components.flow_layout import FlowLayout
 from src.ui.components.album_thumbnail import AlbumThumbnail
+from src.ui.components.cloud_storage_dialog import CloudStorageDialog
 from src.managers.export_manager import ExportManager
+from src.managers.cloud_storage_manager import CloudStorageManager
+from src.managers.cloud_storage_settings import CloudStorageSettings
 from src.utils.helpers import get_resource_path
 
 import os
@@ -36,6 +39,8 @@ class ExportComponent(QWidget, ExportMethods):
         self.thumbnail_labels = {}  # Map of asset_id to QLabel
         self.thumbnail_cache = {}  # Map of asset_id to QPixmap
         self.album_widgets = []  # Keep strong references to album widgets
+        self.cloud_storage_settings = CloudStorageSettings()
+        self.cloud_storage_manager = None
         self.setup_ui()
 
     def reset_export_state(self):
@@ -142,7 +147,7 @@ class ExportComponent(QWidget, ExportMethods):
         filters_header.addWidget(filters_label)
         filters_header.addWidget(filters_text)
         filters_header.addStretch()
-        layout.addLayout(filters_header)
+        self.sidebar_layout.addLayout(filters_header)
 
         # Create 2-column layout for filters
         filters_container = QWidget()
@@ -183,16 +188,16 @@ class ExportComponent(QWidget, ExportMethods):
         filters_layout.addWidget(left_column)
         filters_layout.addWidget(right_column)
 
-        layout.addWidget(filters_container)
+        self.sidebar_layout.addWidget(filters_container)
 
         # Add horizontal divider after filters
-        layout.addWidget(HorizontalDivider())
+        self.sidebar_layout.addWidget(HorizontalDivider())
 
         # Visibility radio buttons
         self.init_visibility_radios()
 
         # Add horizontal divider after visibility
-        layout.addWidget(HorizontalDivider())
+        self.sidebar_layout.addWidget(HorizontalDivider())
 
         # Download type radio buttons
         self.init_download_radios()
@@ -204,8 +209,14 @@ class ExportComponent(QWidget, ExportMethods):
         self.archive_size_field.setPlaceholderText("Enter size in GB")
         self.archive_size_field.setValidator(QIntValidator(1, 1024))
         self.archive_size_field.setText("4")
-        layout.addWidget(self.archive_size_label)
-        layout.addWidget(self.archive_size_field)
+        self.sidebar_layout.addWidget(self.archive_size_label)
+        self.sidebar_layout.addWidget(self.archive_size_field)
+
+        # Add horizontal divider after archive size
+        self.sidebar_layout.addWidget(HorizontalDivider())
+
+        # Cloud storage section
+        self.init_cloud_storage_section(self.sidebar_layout)
 
     def init_visibility_radios(self):
         """Initialize visibility radio buttons."""
@@ -317,9 +328,8 @@ class ExportComponent(QWidget, ExportMethods):
         self.select_all_albums_checkbox = QCheckBox("Select All")
         self.select_all_albums_checkbox.setStyleSheet("""
             QCheckBox {
-                margin: 0;
                 padding: 4px 0;
-                spacing: 0;
+                spacing: 5px;
             }
         """)
         # Connect after setting up the checkbox to avoid initial signal
@@ -432,6 +442,43 @@ class ExportComponent(QWidget, ExportMethods):
                     self.logger.append(f"Albums fetched successfully: {len(self.albums)} albums found.")
                 self.albums_search_input.show()  # Show search input when albums are loaded
                 self.populate_albums_list(self.albums)
+
+                # Mark albums as fetched and show export UI
+                self.albums_main_area.albums_fetched = True
+
+                # Show export UI based on current destination selection
+                if self.destination_cloud.isChecked():
+                    # Cloud export - show cloud message, hide directory selection and archives
+                    self.albums_main_area.output_dir_label.setText("Cloud storage will be used for export")
+                    self.albums_main_area.output_dir_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+                    self.albums_main_area.output_dir_label.show()
+                    self.albums_main_area.output_dir_button.hide()
+                    # Hide archives section for cloud exports (not applicable)
+                    if hasattr(self.albums_main_area, 'archives_section'):
+                        self.albums_main_area.archives_section.hide()
+                    if hasattr(self.albums_main_area, 'archives_display'):
+                        self.albums_main_area.archives_display.hide()
+                else:
+                    # Local export - show directory selection and archives
+                    # Check if a directory has already been selected
+                    if hasattr(self.albums_main_area, 'output_dir') and self.albums_main_area.output_dir:
+                        # Directory already selected, show the selected path
+                        self.albums_main_area.output_dir_label.setText(
+                            f"<span><span style='color: red;'>*</span> Output Directory: <b>{self.albums_main_area.output_dir}</b></span>"
+                        )
+                    else:
+                        # No directory selected yet, show selection prompt
+                        self.albums_main_area.output_dir_label.setText("<span><span style='color: red;'>*</span> Select output directory:</span>")
+                    self.albums_main_area.output_dir_label.setStyleSheet("")
+                    self.albums_main_area.output_dir_label.show()
+                    self.albums_main_area.output_dir_button.show()
+                    # Show archives section for local exports
+                    if hasattr(self.albums_main_area, 'archives_section'):
+                        self.albums_main_area.archives_section.show()
+                    if hasattr(self.albums_main_area, 'archives_display'):
+                        self.albums_main_area.archives_display.show()
+
+                self.albums_main_area.export_button.show()
             else:
                 if self.logger:
                     self.logger.append("No albums found.")
@@ -665,15 +712,14 @@ class ExportComponent(QWidget, ExportMethods):
         widget.setCursor(Qt.PointingHandCursor)  # Show pointer cursor on hover
         layout = QHBoxLayout(widget)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(0)
+        layout.setSpacing(5)
 
         checkbox = QCheckBox(f"{album['albumName']} ({album['assetCount']} assets)")
         checkbox.setChecked(self.select_all_albums_checkbox.isChecked())
         checkbox.setStyleSheet("""
             QCheckBox {
-                margin: 0;
                 padding: 4px 0;
-                spacing: 0;
+                spacing: 5px;
             }
         """)
         checkbox.stateChanged.connect(self.update_select_all_state)  # Connect state change
@@ -715,11 +761,32 @@ class ExportComponent(QWidget, ExportMethods):
             self.list_view_widget.show()
             self.grid_view_widget.hide()
 
-        # Show controls
-        self.albums_main_area.output_dir_label.show()
-        self.albums_main_area.output_dir_button.show()
+        # Show controls based on export destination
         self.albums_main_area.export_button.show()
-        self.albums_main_area.archives_display.show()
+
+        # Check if this is cloud or local export based on the main component's radio buttons
+        if hasattr(self, 'destination_cloud') and self.destination_cloud.isChecked():
+            # Cloud export - show cloud message, hide directory selection and archives
+            self.albums_main_area.output_dir_label.setText("Cloud storage will be used for export")
+            self.albums_main_area.output_dir_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+            self.albums_main_area.output_dir_label.show()
+            self.albums_main_area.output_dir_button.hide()
+            # Hide archives section for cloud exports (not applicable)
+            if hasattr(self.albums_main_area, 'archives_section'):
+                self.albums_main_area.archives_section.hide()
+            if hasattr(self.albums_main_area, 'archives_display'):
+                self.albums_main_area.archives_display.hide()
+        else:
+            # Local export - show directory selection and archives
+            self.albums_main_area.output_dir_label.setText("<span><span style='color: red;'>*</span> Select output directory:</span>")
+            self.albums_main_area.output_dir_label.setStyleSheet("")
+            self.albums_main_area.output_dir_label.show()
+            self.albums_main_area.output_dir_button.show()
+            # Show archives section for local exports
+            if hasattr(self.albums_main_area, 'archives_section'):
+                self.albums_main_area.archives_section.show()
+            if hasattr(self.albums_main_area, 'archives_display'):
+                self.albums_main_area.archives_display.show()
 
     def filter_albums(self, search_text):
         """Filter albums based on search text."""
@@ -852,6 +919,107 @@ class ExportComponent(QWidget, ExportMethods):
         download_widget = QWidget()
         download_widget.setLayout(download_layout)
         self.sidebar_layout.addWidget(download_widget)
+
+    def init_cloud_storage_section(self, layout: QVBoxLayout | QHBoxLayout):
+        """Initialize cloud storage configuration section."""
+        # Cloud storage header
+        cloud_label = QLabel()
+        cloud_label.setStyleSheet("font-weight: bold;")
+        cloud_icon = QIcon(get_resource_path("src/resources/icons/warehouse-icon.svg"))
+        cloud_label.setPixmap(cloud_icon.pixmap(18, 18))
+        cloud_text = QLabel("Storage")
+        cloud_text.setStyleSheet("font-weight: bold;")
+
+        cloud_header = QHBoxLayout()
+        cloud_header.setContentsMargins(0, 0, 0, 0)
+        cloud_header.addWidget(cloud_label)
+        cloud_header.addWidget(cloud_text)
+        cloud_header.addStretch()
+        self.sidebar_layout.addLayout(cloud_header)
+
+        # Export destination radio buttons
+        self.destination_group = QButtonGroup()
+
+        self.destination_local = QRadioButton("Local Export")
+        self.destination_local.setIcon(QIcon(get_resource_path("src/resources/icons/download-icon.svg")))
+        self.destination_local.setChecked(True)  # Default to local
+        self.destination_cloud = QRadioButton("Cloud Export")
+        self.destination_cloud.setIcon(QIcon(get_resource_path("src/resources/icons/cloud-icon.svg")))
+
+        self.destination_group.addButton(self.destination_local, 0)
+        self.destination_group.addButton(self.destination_cloud, 1)
+
+        destination_layout = QHBoxLayout()
+        destination_layout.addWidget(self.destination_local)
+        destination_layout.addWidget(self.destination_cloud)
+        destination_layout.addStretch()
+
+        destination_widget = QWidget()
+        destination_widget.setLayout(destination_layout)
+        self.sidebar_layout.addWidget(destination_widget)
+
+        # Cloud storage configuration
+        self.cloud_config_layout = QVBoxLayout()
+        self.cloud_config_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Cloud provider label with preset management buttons
+        provider_header_layout = QHBoxLayout()
+
+        provider_label = QLabel("Cloud Provider:")
+        provider_header_layout.addWidget(provider_label)
+
+        # Add stretch to push buttons to the right
+        provider_header_layout.addStretch()
+
+        # Preset management buttons
+        self.add_preset_button = QPushButton()
+        self.add_preset_button.setIcon(QIcon(get_resource_path("src/resources/icons/plus-icon.svg")))
+        self.add_preset_button.setToolTip("Add New Preset")
+        self.add_preset_button.setFixedSize(32, 32)
+        self.add_preset_button.clicked.connect(self.add_new_preset)
+        provider_header_layout.addWidget(self.add_preset_button)
+
+        self.edit_preset_button = QPushButton()
+        self.edit_preset_button.setIcon(QIcon(get_resource_path("src/resources/icons/pen-icon.svg")))
+        self.edit_preset_button.setToolTip("Edit Selected Preset")
+        self.edit_preset_button.setFixedSize(32, 32)
+        self.edit_preset_button.clicked.connect(self.edit_selected_preset)
+        self.edit_preset_button.setEnabled(False)  # Disabled until a preset is selected
+        provider_header_layout.addWidget(self.edit_preset_button)
+
+        self.delete_preset_button = QPushButton()
+        self.delete_preset_button.setIcon(QIcon(get_resource_path("src/resources/icons/trash-icon.svg")))
+        self.delete_preset_button.setToolTip("Delete Selected Preset")
+        self.delete_preset_button.setFixedSize(32, 32)
+        self.delete_preset_button.clicked.connect(self.delete_selected_preset)
+        self.delete_preset_button.setEnabled(False)  # Disabled until a preset is selected
+        provider_header_layout.addWidget(self.delete_preset_button)
+
+        self.cloud_config_layout.addLayout(provider_header_layout)
+
+        # Cloud provider dropdown on separate row
+        self.cloud_provider_combo = QComboBox()
+        self.cloud_provider_combo.setPlaceholderText("Select cloud provider preset")
+        self.cloud_provider_combo.currentTextChanged.connect(self.on_cloud_provider_changed)
+        self.cloud_config_layout.addWidget(self.cloud_provider_combo)
+
+        # Cloud status
+        self.cloud_status_label = QLabel("No cloud storage configured")
+        self.cloud_status_label.setStyleSheet("color: #666; font-style: italic;")
+        self.cloud_config_layout.addWidget(self.cloud_status_label)
+
+        cloud_config_widget = QWidget()
+        cloud_config_widget.setLayout(self.cloud_config_layout)
+        self.sidebar_layout.addWidget(cloud_config_widget)
+
+        # Initially hide cloud config (local is default)
+        self.cloud_config_layout.parent().setVisible(False)
+
+        # Connect destination change
+        self.destination_group.buttonClicked.connect(self.on_destination_changed)
+
+        # Load existing cloud configurations
+        self.load_cloud_configurations()
 
     def get_visibility_value(self):
         """Get the selected visibility value."""
@@ -1079,13 +1247,34 @@ class ExportComponent(QWidget, ExportMethods):
             self.timeline_main_area.order_label.show()
             self.timeline_main_area.order_button.show()
 
-            # Show output directory and export sections
-            self.timeline_main_area.output_dir_label.show()
-            self.timeline_main_area.output_dir_button.show()
-            self.timeline_main_area.export_button.show()
+            # Mark buckets as fetched and show export sections
+            self.timeline_main_area.buckets_fetched = True
 
-            # Show archives display area
-            self.timeline_main_area.archives_display.show()
+            # Show export UI based on current destination selection
+            if self.destination_cloud.isChecked():
+                # Cloud export - show cloud message, hide directory selection and archives
+                self.timeline_main_area.output_dir_label.setText("Cloud storage will be used for export")
+                self.timeline_main_area.output_dir_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+                self.timeline_main_area.output_dir_label.show()
+                self.timeline_main_area.output_dir_button.hide()
+                # Hide archives section for cloud exports (not applicable)
+                if hasattr(self.timeline_main_area, 'archives_section'):
+                    self.timeline_main_area.archives_section.hide()
+                if hasattr(self.timeline_main_area, 'archives_display'):
+                    self.timeline_main_area.archives_display.hide()
+            else:
+                # Local export - show directory selection and archives
+                self.timeline_main_area.output_dir_label.setText("<span><span style='color: red;'>*</span> Select output directory:</span>")
+                self.timeline_main_area.output_dir_label.setStyleSheet("")
+                self.timeline_main_area.output_dir_label.show()
+                self.timeline_main_area.output_dir_button.show()
+                # Show archives section for local exports
+                if hasattr(self.timeline_main_area, 'archives_section'):
+                    self.timeline_main_area.archives_section.show()
+                if hasattr(self.timeline_main_area, 'archives_display'):
+                    self.timeline_main_area.archives_display.show()
+
+            self.timeline_main_area.export_button.show()
 
         except Exception as e:
             error_msg = str(e).lower()
@@ -1131,6 +1320,8 @@ class ExportComponent(QWidget, ExportMethods):
         if not selected_items:
             if self.logger:
                 self.logger.append("Error: No items selected for export.")
+            # Reset UI state on error
+            self.reset_ui_state_on_error(main_area)
             return
 
         main_area.export_button.hide()
@@ -1175,7 +1366,7 @@ class ExportComponent(QWidget, ExportMethods):
                 self.logger.append(f"Processing album {i}/{len(selected_items)}: {album['albumName']}")
 
             try:
-                result = self.download_and_save_archive(main_area, album["assets"], album["albumName"], archive_size_bytes, album_id=album["id"])
+                result = self.download_and_save_archive(main_area, None, album["albumName"], archive_size_bytes, album_id=album["id"])
                 if result == "paused":
                     # Save state and show resume button
                     self.save_export_state(selected_items, None, archive_size_bytes, "Albums", i - 1)
@@ -1323,6 +1514,8 @@ class ExportComponent(QWidget, ExportMethods):
             if total_size == 0:
                 if self.logger:
                     self.logger.append(f"Failed to prepare archive for \"{archive_name}\"")
+                # Reset UI state on archive preparation failure
+                self.reset_ui_state_on_error(main_area)
                 return "error"
 
             total_archives_number = len(archive_info["archives"])
@@ -1341,15 +1534,51 @@ class ExportComponent(QWidget, ExportMethods):
             for archive in archive_info["archives"]:
                 local_archive_name = f"{archive_name}_{completed_archives_count + 1}" if total_archives_number > 1 else f"{archive_name}"
 
-                self.logger.append(f"Downloading archive {completed_archives_count + 1} of {total_archives_number} for \"{local_archive_name}\"; Archive size = {self.export_manager.format_size(archive['size'])}")
+                # Get cloud configuration if using cloud export
+                cloud_config = self.get_cloud_configuration() if self.get_export_destination() == "cloud" else None
+
+                if cloud_config:
+                    self.logger.append(f"Streaming archive {completed_archives_count + 1} of {total_archives_number} for \"{local_archive_name}\" to cloud storage; Archive size = {self.export_manager.format_size(archive['size'])}")
+                else:
+                    self.logger.append(f"Downloading archive {completed_archives_count + 1} of {total_archives_number} for \"{local_archive_name}\"; Archive size = {self.export_manager.format_size(archive['size'])}")
+
+                # Use the unified download method (handles both local and cloud)
                 download_result = self.export_manager.download_archive(
-                    archive["assetIds"], local_archive_name, archive["size"], main_area.current_download_progress_bar
+                    archive["assetIds"], local_archive_name, archive["size"], main_area.current_download_progress_bar, album_id=album_id, cloud_config=cloud_config
                 )
 
                 if download_result == "paused":
                     return "paused"
                 elif download_result == "cancelled":
                     return "cancelled"
+                elif download_result == "uploading":
+                    # For cloud uploads, wait for completion
+                    self.logger.append("Cloud upload started. You can cancel using the Stop button.")
+                    # Wait for upload to complete
+                    while hasattr(self.export_manager, 'upload_thread') and self.export_manager.upload_thread.isRunning():
+                        from PyQt5.QtCore import QThread
+                        QThread.msleep(100)  # Check every 100ms
+                        from PyQt5.QtWidgets import QApplication
+                        QApplication.processEvents()  # Keep UI responsive
+
+                    # Check the result
+                    if hasattr(self.export_manager, 'upload_result'):
+                        if self.export_manager.upload_result == "completed":
+                            main_area.archives_display.show()
+                            main_area.archives_display.append(f"{local_archive_name}")
+                            completed_archives_count += 1
+                            if completed_archives_count == total_archives_number:
+                                return "completed"
+                            else:
+                                continue
+                        else:
+                            # Cloud upload failed - reset UI state
+                            self.reset_ui_state_on_error(main_area)
+                            return "error"
+                    else:
+                        # No upload result - reset UI state
+                        self.reset_ui_state_on_error(main_area)
+                        return "error"
                 elif download_result == "completed":
                     main_area.archives_display.show()
                     main_area.archives_display.append(f"{local_archive_name}")
@@ -1359,10 +1588,14 @@ class ExportComponent(QWidget, ExportMethods):
                     else:
                         continue
                 else:
+                    # Download failed - reset UI state
+                    self.reset_ui_state_on_error(main_area)
                     return "error"
         except Exception as e:
             if self.logger:
                 self.logger.append(f"Error preparing archive for \"{archive_name}\": {str(e)}")
+            # Reset UI state on exception
+            self.reset_ui_state_on_error(main_area)
             return "error"
 
     def clear_bucket_list(self):
@@ -1490,8 +1723,19 @@ class ExportComponent(QWidget, ExportMethods):
 
         main_area.stop_button.hide()
 
-        # Show output directory button when export is paused
-        main_area.output_dir_button.show()
+        # Check if this is cloud or local export based on the main component's radio buttons
+        is_cloud_export = (hasattr(self, 'destination_cloud') and
+                          self.destination_cloud.isChecked())
+
+        if is_cloud_export:
+            # For cloud export, keep cloud message visible but hide directory selection
+            main_area.output_dir_label.setText("Cloud storage will be used for export")
+            main_area.output_dir_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+            main_area.output_dir_label.show()
+            main_area.output_dir_button.hide()
+        else:
+            # Show output directory button when export is paused (local export only)
+            main_area.output_dir_button.show()
 
         # Check if server supports Range headers
         if self.export_manager:
@@ -1527,12 +1771,35 @@ class ExportComponent(QWidget, ExportMethods):
             # Only finalize if not paused
             main_area.stop_button.hide()
             main_area.export_button.show()
-            main_area.archives_section.show()
             main_area.current_download_progress_bar.hide()
             main_area.progress_bar.hide()
 
-            # Show output directory button when export is finished
-            main_area.output_dir_button.show()
+            # Check if this is cloud or local export based on the main component's radio buttons
+            is_cloud_export = (hasattr(self, 'destination_cloud') and
+                              self.destination_cloud.isChecked())
+
+            if is_cloud_export:
+                # For cloud export, keep cloud message visible but hide directory selection and archives
+                main_area.output_dir_label.setText("Cloud storage will be used for export")
+                main_area.output_dir_label.setStyleSheet("color: #4CAF50; font-weight: bold;")
+                main_area.output_dir_label.show()
+                main_area.output_dir_button.hide()
+                # Hide archives section for cloud exports (not applicable)
+                if hasattr(main_area, 'archives_section'):
+                    main_area.archives_section.hide()
+                if hasattr(main_area, 'archives_display'):
+                    main_area.archives_display.hide()
+            else:
+                # For local export, show directory button and archives section
+                main_area.archives_section.show()
+                main_area.output_dir_button.show()
+                # Restore the selected directory path display
+                if hasattr(main_area, 'output_dir') and main_area.output_dir:
+                    main_area.output_dir_label.setText(
+                        f"<span><span style='color: red;'>*</span> Output Directory: <b>{main_area.output_dir}</b></span>"
+                    )
+                    main_area.output_dir_label.setStyleSheet("")
+                    main_area.output_dir_label.show()
 
             # Re-enable tab switching when export is completed
             self.reset_export_state()

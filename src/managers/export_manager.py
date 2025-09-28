@@ -5,6 +5,7 @@ import json
 from datetime import datetime
 from PyQt5.QtWidgets import QApplication
 from src.utils.helpers import get_path_in_app
+from src.managers.cloud_storage_manager import CloudStorageManager
 
 class ExportManager:
     def __init__(self, login_manager, logger, output_dir, stop_flag_callback):
@@ -31,6 +32,7 @@ class ExportManager:
 
         os.makedirs(self.resume_metadata_dir, exist_ok=True)
         self.range_support_cache = {}  # Cache Range header support per server
+        self.cloud_storage_manager = CloudStorageManager(logger)
 
     def log(self, message: str):
         if self.logger:
@@ -40,6 +42,7 @@ class ExportManager:
         url = (
             f"/timeline/buckets"
             f"?isArchived={str(is_archived).lower()}"
+            f"&size=MONTH" # this is for backward compatibility with old immich API (server version < v1.133.0)
             f"&withPartners={str(with_partners).lower()}"
             f"&withStacked={str(with_stacked).lower()}"
             f"&isFavorite={str(is_favorite).lower()}"
@@ -119,6 +122,7 @@ class ExportManager:
         url = (
             f"/timeline/bucket"
             f"?isArchived={str(is_archived).lower()}"
+            f"&size=MONTH" # this is for backward compatibility with old immich API (server version < v1.133.0)
             f"&withPartners={str(with_partners).lower()}"
             f"&withStacked={str(with_stacked).lower()}"
             f"&timeBucket={time_bucket}"
@@ -277,7 +281,20 @@ class ExportManager:
 
         return existing_files, missing_files
 
-    def download_archive(self, asset_ids=None, bucket_name=None, total_size=None, current_download_progress_bar=None, album_id=None):
+    def stop_cloud_upload(self):
+        """Stop the current cloud upload thread."""
+        if hasattr(self, 'upload_thread') and self.upload_thread.isRunning():
+            self.upload_thread.stop()
+            self.upload_thread.quit()
+            # Wait for thread to finish with a timeout
+            if not self.upload_thread.wait(5000):  # 5 second timeout
+                self.upload_thread.terminate()  # Force terminate if it doesn't stop
+                self.upload_thread.wait()
+            self.log("Cloud upload stopped by user")
+            return True
+        return False
+
+    def download_archive(self, asset_ids=None, bucket_name=None, total_size=None, current_download_progress_bar=None, album_id=None, cloud_config=None):
         if not self.login_manager.is_logged_in():
             self.log("User is not logged in. Download cancelled.")
             return "cancelled"
@@ -286,68 +303,121 @@ class ExportManager:
             self.log("No assets or album provided for download")
             return
 
+        # For cloud uploads, handle streaming directly
+        if cloud_config:
+            # Start cloud upload in a separate thread to keep UI responsive
+            from .cloud_upload_thread import CloudUploadThread
+
+            # Create and start the upload thread
+            self.upload_thread = CloudUploadThread(self, asset_ids, album_id, bucket_name, total_size, cloud_config, self.logger)
+
+            # Connect signals
+            def on_progress_updated(progress, message):
+                if current_download_progress_bar:
+                    current_download_progress_bar.setValue(progress)
+                    current_download_progress_bar.setFormat(message)
+                # Log to main application logger (thread-safe)
+                self.log(message)
+
+            def on_upload_completed(success, message):
+                if success:
+                    if current_download_progress_bar:
+                        current_download_progress_bar.setValue(100)
+                        current_download_progress_bar.setFormat(f"Upload completed: {bucket_name}")
+                    success_msg = f"Successfully uploaded {bucket_name}.zip to cloud storage"
+                    self.log(success_msg)
+                else:
+                    error_msg = f"Failed to upload to cloud storage: {message}"
+                    self.log(error_msg)
+                # Store the result for the main thread to check
+                self.upload_result = "completed" if success else "error"
+
+            self.upload_thread.progress_updated.connect(on_progress_updated)
+            self.upload_thread.upload_completed.connect(on_upload_completed)
+
+            # Start the thread
+            self.upload_thread.start()
+
+            # Return immediately to keep UI responsive
+            # The actual result will be handled by the signal
+            return "uploading"
+
+        # For local downloads, use the output directory
         archive_path = os.path.join(self.output_dir, f"{bucket_name}.zip")
         partial_archive_path = f"{archive_path}.partial"
 
         try:
-            os.makedirs(self.output_dir, exist_ok=True)
+            if not cloud_config:
+                os.makedirs(self.output_dir, exist_ok=True)
 
-            # Skip if the file already exists and size matches with smart tolerance
-            if os.path.exists(archive_path):
-                existing_size = os.path.getsize(archive_path)
+            # Local file handling (skip for cloud uploads)
+            if not cloud_config:
+                # Skip if the file already exists and size matches with smart tolerance
+                if os.path.exists(archive_path):
+                    existing_size = os.path.getsize(archive_path)
 
-                # Calculate smart tolerance: minimum of 1KB or 0.1% of file size
-                min_tolerance = 1024  # 1KB minimum
-                percentage_tolerance = max(min_tolerance, int(total_size * 0.001))  # 0.1% of file size
+                    # Calculate smart tolerance: minimum of 1KB or 0.1% of file size
+                    min_tolerance = 1024  # 1KB minimum
+                    percentage_tolerance = max(min_tolerance, int(total_size * 0.001))  # 0.1% of file size
 
-                size_difference = abs(existing_size - total_size)
+                    size_difference = abs(existing_size - total_size)
 
-                if size_difference <= percentage_tolerance:
-                    self.log(f"Archive \"{bucket_name}.zip\" already exists ({self.format_size(existing_size)}). Skipping download.")
-                    return "completed"
+                    if size_difference <= percentage_tolerance:
+                        self.log(f"Archive \"{bucket_name}.zip\" already exists ({self.format_size(existing_size)}). Skipping download.")
+                        return "completed"
+                    else:
+                        # File exists but size doesn't match - could be corrupted or different content
+                        self.log(f"Archive \"{bucket_name}.zip\" exists but size mismatch:")
+                        self.log(f"  Existing: {self.format_size(existing_size)} ({existing_size:,} bytes)")
+                        self.log(f"  Expected: {self.format_size(total_size)} ({total_size:,} bytes)")
+                        self.log(f"  Difference: {self.format_size(size_difference)} ({size_difference:,} bytes)")
+                        self.log(f"  Tolerance: {self.format_size(percentage_tolerance)} ({percentage_tolerance:,} bytes)")
+                        self.log(f"File will be re-downloaded to ensure data integrity.")
+
+                # Check for resume capability
+                can_resume, existing_bytes = self.can_resume_download(bucket_name, asset_ids, total_size)
+
+                # Check if server supports Range headers
+                server_url = getattr(self.api_manager, 'server_url', 'unknown')
+                server_supports_range = self.check_range_header_support(server_url)
+
+                if can_resume:
+                    if not server_supports_range:
+                        self.log(f"Resume attempted for \"{bucket_name}.zip\" but server doesn't support Range headers.")
+                        self.log(f"Will start fresh download to avoid corruption. Your previous progress was: {self.format_size(existing_bytes)}")
+                        downloaded_size = 0
+                        file_mode = "wb"
+                        headers = {}
+                        # Clean any existing partial file
+                        if os.path.exists(partial_archive_path):
+                            os.remove(partial_archive_path)
+                    else:
+                        self.log(f"Resuming download for \"{bucket_name}.zip\" from {self.format_size(existing_bytes)} ({existing_bytes} bytes)")
+                        downloaded_size = existing_bytes
+                        file_mode = "ab"  # Append mode for resume
+                        headers = {"Range": f"bytes={existing_bytes}-"}
                 else:
-                    # File exists but size doesn't match - could be corrupted or different content
-                    self.log(f"Archive \"{bucket_name}.zip\" exists but size mismatch:")
-                    self.log(f"  Existing: {self.format_size(existing_size)} ({existing_size:,} bytes)")
-                    self.log(f"  Expected: {self.format_size(total_size)} ({total_size:,} bytes)")
-                    self.log(f"  Difference: {self.format_size(size_difference)} ({size_difference:,} bytes)")
-                    self.log(f"  Tolerance: {self.format_size(percentage_tolerance)} ({percentage_tolerance:,} bytes)")
-                    self.log(f"File will be re-downloaded to ensure data integrity.")
-
-            # Check for resume capability
-            can_resume, existing_bytes = self.can_resume_download(bucket_name, asset_ids, total_size)
-
-            # Check if server supports Range headers
-            server_url = getattr(self.api_manager, 'server_url', 'unknown')
-            server_supports_range = self.check_range_header_support(server_url)
-
-            if can_resume:
-                if not server_supports_range:
-                    self.log(f"Resume attempted for \"{bucket_name}.zip\" but server doesn't support Range headers.")
-                    self.log(f"Will start fresh download to avoid corruption. Your previous progress was: {self.format_size(existing_bytes)}")
+                    self.log(f"Starting fresh download: \"{bucket_name}.zip\"")
                     downloaded_size = 0
-                    file_mode = "wb"
+                    file_mode = "wb"  # Write mode for new download
                     headers = {}
                     # Clean any existing partial file
                     if os.path.exists(partial_archive_path):
                         os.remove(partial_archive_path)
-                else:
-                    self.log(f"Resuming download for \"{bucket_name}.zip\" from {self.format_size(existing_bytes)} ({existing_bytes} bytes)")
-                    downloaded_size = existing_bytes
-                    file_mode = "ab"  # Append mode for resume
-                    headers = {"Range": f"bytes={existing_bytes}-"}
             else:
-                self.log(f"Starting fresh download: \"{bucket_name}.zip\"")
+                # For cloud uploads, use simple headers
                 downloaded_size = 0
-                file_mode = "wb"  # Write mode for new download
+                file_mode = "wb"
                 headers = {}
-                # Clean any existing partial file
-                if os.path.exists(partial_archive_path):
-                    os.remove(partial_archive_path)
 
             payload = {}
             if album_id:
-                payload["albumId"] = album_id
+                # For albums, we need to fetch the asset IDs first
+                album_asset_ids = self.get_album_assets(album_id)
+                if not album_asset_ids:
+                    self.log(f"No assets found for album {album_id}")
+                    return "error"
+                payload["assetIds"] = album_asset_ids
             else:
                 payload["assetIds"] = asset_ids
 
@@ -370,6 +440,87 @@ class ExportManager:
                     else:
                         self.log(f"Failed to start download for {bucket_name}.zip: {response.status_code if response else 'No response'}")
                         return "error"
+
+                # If this is a cloud upload, stream directly to cloud storage
+                if cloud_config:
+                    self.log(f"Streaming {bucket_name}.zip directly to cloud storage...")
+
+                    # Create progress callback wrapper
+                    def progress_wrapper(progress, uploaded_bytes, total_bytes, speed):
+                        # Format speed like local downloads
+                        speed_mb = speed / (1024 ** 2)  # Convert from bytes/s to MB/s
+                        speed_text = f", Speed: {speed_mb:.2f} MB/s" if speed > 0 else ""
+
+                        if current_download_progress_bar:
+                            current_download_progress_bar.setValue(int(progress))
+                            current_download_progress_bar.setFormat(f"Uploading: {bucket_name} - {progress:.1f}% ({self.format_size(uploaded_bytes)}/{self.format_size(total_bytes)}){speed_text}")
+                        self.log(f"Upload progress: {progress:.1f}% ({self.format_size(uploaded_bytes)}/{self.format_size(total_bytes)}){speed_text}")
+
+                    # Upload stream directly to cloud
+                    if cloud_config.get('type') == 'webdav':
+                        # Create remote directory if specified
+                        remote_dir = cloud_config.get('remote_directory', '')
+                        if remote_dir:
+                            self.cloud_storage_manager.create_webdav_directory(
+                                cloud_config['url'],
+                                cloud_config['username'],
+                                cloud_config['password'],
+                                remote_dir,
+                                cloud_config.get('auth_type', 'basic')
+                            )
+
+                        # Construct remote path
+                        if remote_dir:
+                            remote_path = f"{remote_dir}/{bucket_name}.zip"
+                        else:
+                            remote_path = f"{bucket_name}.zip"
+
+                        # Upload stream directly
+                        upload_success, upload_message = self.cloud_storage_manager.upload_stream_to_webdav(
+                            response,
+                            cloud_config['url'],
+                            cloud_config['username'],
+                            cloud_config['password'],
+                            remote_path,
+                            cloud_config.get('auth_type', 'basic'),
+                            progress_wrapper,
+                            total_size
+                        )
+
+                    elif cloud_config.get('type') == 's3':
+                        # S3 streaming upload
+                        remote_prefix = cloud_config.get('remote_prefix', '')
+                        if remote_prefix:
+                            remote_path = f"{remote_prefix}/{bucket_name}.zip"
+                        else:
+                            remote_path = f"{bucket_name}.zip"
+
+                        # Upload stream directly to S3
+                        upload_success, upload_message = self.cloud_storage_manager.upload_stream_to_s3(
+                            response,
+                            cloud_config['endpoint_url'],
+                            cloud_config['access_key'],
+                            cloud_config['secret_key'],
+                            cloud_config['bucket_name'],
+                            remote_path,
+                            cloud_config.get('region', 'us-east-1'),
+                            progress_wrapper,
+                            total_size
+                        )
+                    else:
+                        upload_success, upload_message = False, f"Unsupported cloud storage type: {cloud_config.get('type')}"
+
+                    if upload_success:
+                        self.log(f"Successfully uploaded {bucket_name}.zip to cloud storage")
+                        if current_download_progress_bar:
+                            current_download_progress_bar.setValue(100)
+                            current_download_progress_bar.setFormat(f"Upload completed: {bucket_name}")
+                        return "completed"
+                    else:
+                        self.log(f"Failed to upload to cloud storage: {upload_message}")
+                        return "error"
+
+                # If we reach here, it's a local download - continue with file writing logic
 
                 # Check if server actually honored the Range request
                 actual_resume = False
@@ -423,107 +574,108 @@ class ExportManager:
 
                 # Track bytes downloaded in this session vs total bytes written to file
                 session_downloaded = 0  # Bytes downloaded in this session
-                total_bytes_written = downloaded_size  # Total bytes written to file (including existing)
+                # Local file writing (skip for cloud uploads)
+                if not cloud_config:
+                    total_bytes_written = downloaded_size  # Total bytes written to file (including existing)
 
-                # Update progress bar for resume
-                if actual_resume and downloaded_size > 0:
-                    initial_progress = int((downloaded_size / total_size) * 100) if total_size else 0
-                    current_download_progress_bar.setValue(initial_progress)
-                    current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - {initial_progress}% (Resumed: +{self.format_size(session_downloaded)})")
-                    self.log(f"Resume progress: {initial_progress}% ({self.format_size(downloaded_size)}/{self.format_size(total_size)})")
-                else:
-                    current_download_progress_bar.setValue(0)
-                    current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - 0%")
+                    # Update progress bar for resume
+                    if actual_resume and downloaded_size > 0:
+                        initial_progress = int((downloaded_size / total_size) * 100) if total_size else 0
+                        current_download_progress_bar.setValue(initial_progress)
+                        current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - {initial_progress}% (Resumed: +{self.format_size(session_downloaded)})")
+                        self.log(f"Resume progress: {initial_progress}% ({self.format_size(downloaded_size)}/{self.format_size(total_size)})")
+                    else:
+                        current_download_progress_bar.setValue(0)
+                        current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - 0%")
 
-                current_download_progress_bar.show()
+                    current_download_progress_bar.show()
 
-                start_time = time.time()
-                last_logged_progress = int((total_bytes_written / total_size) * 100) if total_size else 0
-                last_save_time = time.time()
-                save_interval = 5.0  # Save resume metadata every 5 seconds
+                    start_time = time.time()
+                    last_logged_progress = int((total_bytes_written / total_size) * 100) if total_size else 0
+                    last_save_time = time.time()
+                    save_interval = 5.0  # Save resume metadata every 5 seconds
 
-                with open(partial_archive_path, file_mode) as archive_file:
-                    for chunk in response.iter_content(chunk_size=131072):  # 128KB chunk size
-                        if self.stop_flag():
-                            # Special handling for range-not-supported case
-                            if range_not_supported:
-                                # Preserve original resume metadata instead of overwriting with fresh download progress
-                                if self.save_resume_metadata(bucket_name, asset_ids, total_size, original_resume_bytes):
-                                    self.log(f"Download paused. Original resume data preserved for {bucket_name}.zip ({self.format_size(original_resume_bytes)}/{self.format_size(total_size)})")
-                                    self.log(f"Note: Server doesn't support Range headers. Next resume will restart from 0% to avoid corruption.")
-                                else:
-                                    self.log(f"Download stopped. Failed to preserve resume data for {bucket_name}.zip")
-                            elif not self.login_manager.is_logged_in():
-                                self.log(f"Download stopped. User is logged out.")
-                                return "cancelled"
-                            else:
-                                # Normal case - save current progress
-                                if self.save_resume_metadata(bucket_name, asset_ids, total_size, total_bytes_written):
-                                    self.log(f"Download paused. Resume data saved for {bucket_name}.zip ({self.format_size(total_bytes_written)}/{self.format_size(total_size)})")
-                                else:
-                                    self.log(f"Download stopped. Failed to save resume data for {bucket_name}.zip")
-                            return "paused"
-
-                        if chunk:
-                            archive_file.write(chunk)
-                            session_downloaded += len(chunk)
-                            total_bytes_written += len(chunk)
-
-                            if total_size:
-                                progress = int((total_bytes_written / total_size) * 100)
-                                # Ensure progress never exceeds 100%
-                                progress = min(progress, 100)
-                                current_download_progress_bar.setValue(progress)
-
-                                if actual_resume:
-                                    current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - {progress}% (Resumed: +{self.format_size(session_downloaded)})")
-                                else:
-                                    current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - {progress}%")
-
-                                # Log progress every 1%
-                                if progress >= last_logged_progress + 1:
-                                    last_logged_progress = progress
-
-                                    # Calculate download speed
-                                    elapsed_time = time.time() - start_time
-                                    if elapsed_time > 0:
-                                        speed_mb = (total_bytes_written / elapsed_time) / (1024 ** 2)
-                                        speed_text = f", Speed: {speed_mb:.2f} MB/s"
+                    with open(partial_archive_path, file_mode) as archive_file:
+                        for chunk in response.iter_content(chunk_size=131072):  # 128KB chunk size
+                            if self.stop_flag():
+                                # Special handling for range-not-supported case
+                                if range_not_supported:
+                                    # Preserve original resume metadata instead of overwriting with fresh download progress
+                                    if self.save_resume_metadata(bucket_name, asset_ids, total_size, original_resume_bytes):
+                                        self.log(f"Download paused. Original resume data preserved for {bucket_name}.zip ({self.format_size(original_resume_bytes)}/{self.format_size(total_size)})")
+                                        self.log(f"Note: Server doesn't support Range headers. Next resume will restart from 0% to avoid corruption.")
                                     else:
-                                        speed_text = ""
+                                        self.log(f"Download stopped. Failed to preserve resume data for {bucket_name}.zip")
+                                elif not self.login_manager.is_logged_in():
+                                    self.log(f"Download stopped. User is logged out.")
+                                    return "cancelled"
+                                else:
+                                    # Normal case - save current progress
+                                    if self.save_resume_metadata(bucket_name, asset_ids, total_size, total_bytes_written):
+                                        self.log(f"Download paused. Resume data saved for {bucket_name}.zip ({self.format_size(total_bytes_written)}/{self.format_size(total_size)})")
+                                    else:
+                                        self.log(f"Download stopped. Failed to save resume data for {bucket_name}.zip")
+                                return "paused"
+
+                            if chunk:
+                                archive_file.write(chunk)
+                                session_downloaded += len(chunk)
+                                total_bytes_written += len(chunk)
+
+                                if total_size:
+                                    progress = int((total_bytes_written / total_size) * 100)
+                                    # Ensure progress never exceeds 100%
+                                    progress = min(progress, 100)
+                                    current_download_progress_bar.setValue(progress)
 
                                     if actual_resume:
-                                        self.log(f"Download progress: {progress}% (Total: {self.format_size(total_bytes_written)}, Session: +{self.format_size(session_downloaded)}){speed_text}")
+                                        current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - {progress}% (Resumed: +{self.format_size(session_downloaded)})")
                                     else:
-                                        self.log(f"Download progress: {progress}% ({self.format_size(total_bytes_written)}){speed_text}")
+                                        current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - {progress}%")
 
-                                # Save resume metadata periodically (but not if range not supported and we're in fresh download)
-                                current_time = time.time()
-                                if current_time - last_save_time >= save_interval:
-                                    if not range_not_supported:
-                                        # Only save current progress if Range headers work
-                                        self.save_resume_metadata(bucket_name, asset_ids, total_size, total_bytes_written)
-                                    # Don't overwrite original progress when range not supported
-                                    last_save_time = current_time
+                                    # Log progress every 1%
+                                    if progress >= last_logged_progress + 1:
+                                        last_logged_progress = progress
 
-                            QApplication.processEvents()
+                                        # Calculate download speed
+                                        elapsed_time = time.time() - start_time
+                                        if elapsed_time > 0:
+                                            speed_mb = (total_bytes_written / elapsed_time) / (1024 ** 2)
+                                            speed_text = f", Speed: {speed_mb:.2f} MB/s"
+                                        else:
+                                            speed_text = ""
 
-                # Download completed successfully
-                if not self.stop_flag() and self.login_manager.is_logged_in():
-                    current_download_progress_bar.setValue(100)
-                    current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - 100%")
+                                        if actual_resume:
+                                            self.log(f"Download progress: {progress}% (Total: {self.format_size(total_bytes_written)}, Session: +{self.format_size(session_downloaded)}){speed_text}")
+                                        else:
+                                            self.log(f"Download progress: {progress}% ({self.format_size(total_bytes_written)}){speed_text}")
 
-                    # Move partial file to final location
-                    if os.path.exists(partial_archive_path):
-                        if os.path.exists(archive_path):
-                            os.remove(archive_path)
-                        os.rename(partial_archive_path, archive_path)
+                                    # Save resume metadata periodically (but not if range not supported and we're in fresh download)
+                                    current_time = time.time()
+                                    if current_time - last_save_time >= save_interval:
+                                        if not range_not_supported:
+                                            # Only save current progress if Range headers work
+                                            self.save_resume_metadata(bucket_name, asset_ids, total_size, total_bytes_written)
+                                        # Don't overwrite original progress when range not supported
+                                        last_save_time = current_time
 
-                    # Clean up resume metadata
-                    self.cleanup_resume_metadata(bucket_name)
+                                QApplication.processEvents()
 
-                    final_size = os.path.getsize(archive_path)
-                    self.log(f"Download completed: {bucket_name}.zip ({self.format_size(final_size)})")
+                        # Download completed successfully
+                        if not self.stop_flag() and self.login_manager.is_logged_in():
+                            current_download_progress_bar.setValue(100)
+                            current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - 100%")
+
+                            # Move partial file to final location
+                            if os.path.exists(archive_path):
+                                os.remove(archive_path)
+                            os.rename(partial_archive_path, archive_path)
+
+                            # Clean up resume metadata
+                            self.cleanup_resume_metadata(bucket_name)
+
+                            final_size = os.path.getsize(archive_path)
+                            self.log(f"Download completed: {bucket_name}.zip ({self.format_size(final_size)})")
 
                     if actual_resume:
                         self.log(f"Resume session downloaded: {self.format_size(session_downloaded)} additional bytes")
@@ -538,6 +690,7 @@ class ExportManager:
                     if size_difference > percentage_tolerance:
                         self.log(f"WARNING: File size mismatch! Expected: {self.format_size(total_size)} ({total_size:,} bytes), Got: {self.format_size(final_size)} ({final_size:,} bytes)")
                         self.log(f"Difference: {self.format_size(size_difference)} ({size_difference:,} bytes), Tolerance: {self.format_size(percentage_tolerance)} ({percentage_tolerance:,} bytes)")
+
 
                     return "completed"
 
@@ -627,6 +780,36 @@ class ExportManager:
             self.log(f"Failed to fetch albums: {str(e)}")
             raise
 
+    def get_album_assets(self, album_id):
+        """Get assets for a specific album."""
+        try:
+            # Try the album detail endpoint which might include assets
+            response = self.api_manager.get(f"/albums/{album_id}", expected_type=dict)
+            if not response:
+                self.log(f"No album data returned for album {album_id}")
+                return []
+
+            # Check if the response contains assets
+            if 'assets' in response and isinstance(response['assets'], list):
+                asset_ids = []
+                for asset in response['assets']:
+                    if isinstance(asset, dict) and 'id' in asset:
+                        asset_ids.append(asset['id'])
+                    elif isinstance(asset, str):
+                        asset_ids.append(asset)
+                return asset_ids
+
+            # If no assets field, try assetIds field
+            if 'assetIds' in response and isinstance(response['assetIds'], list):
+                return response['assetIds']
+
+            self.log(f"No assets found in album data for {album_id}")
+            return []
+
+        except Exception as e:
+            self.log(f"Failed to fetch assets for album {album_id}: {str(e)}")
+            raise
+
     def _validate_album(self, album):
         if not isinstance(album, dict):
             return "Invalid format"
@@ -645,3 +828,98 @@ class ExportManager:
             return "Invalid date format"
 
         return None
+
+    def upload_archive_to_cloud(self, file_path: str, cloud_config: dict, remote_filename: str,
+                              progress_callback=None) -> tuple[bool, str]:
+        """
+        Upload an archive file to cloud storage.
+
+        Args:
+            file_path: Local file path to upload
+            cloud_config: Cloud storage configuration
+            remote_filename: Remote filename
+            progress_callback: Optional progress callback
+
+        Returns:
+            Tuple of (success: bool, message: str)
+        """
+        try:
+            if not os.path.exists(file_path):
+                return False, f"Local file not found: {file_path}"
+
+            file_size = os.path.getsize(file_path)
+            if file_size == 0:
+                return False, "Cannot upload empty file"
+
+            self.log(f"Starting cloud upload: {remote_filename}")
+
+            # Create progress callback wrapper
+            def progress_wrapper(progress, uploaded_bytes, total_bytes, speed):
+                # Format speed like local downloads
+                speed_mb = speed / (1024 ** 2)  # Convert from bytes/s to MB/s
+                speed_text = f", Speed: {speed_mb:.2f} MB/s" if speed > 0 else ""
+
+                if progress_callback:
+                    progress_callback.setValue(int(progress))
+                    progress_callback.setFormat(f"Uploading: {remote_filename} - {progress:.1f}% ({self.format_size(uploaded_bytes)}/{self.format_size(total_bytes)}){speed_text}")
+                self.log(f"Upload progress: {progress:.1f}% ({self.format_size(uploaded_bytes)}/{self.format_size(total_bytes)}){speed_text}")
+
+            # Upload based on cloud type
+            if cloud_config.get('type') == 'webdav':
+                # Create remote directory if specified
+                remote_dir = cloud_config.get('remote_directory', '')
+                if remote_dir:
+                    self.cloud_storage_manager.create_webdav_directory(
+                        cloud_config['url'],
+                        cloud_config['username'],
+                        cloud_config['password'],
+                        remote_dir,
+                        cloud_config.get('auth_type', 'basic')
+                    )
+
+                # Construct remote path
+                if remote_dir:
+                    remote_path = f"{remote_dir}/{remote_filename}"
+                else:
+                    remote_path = remote_filename
+
+                # Upload file
+                success, message = self.cloud_storage_manager.upload_file_to_webdav(
+                    file_path,
+                    cloud_config['url'],
+                    cloud_config['username'],
+                    cloud_config['password'],
+                    remote_path,
+                    cloud_config.get('auth_type', 'basic'),
+                    progress_wrapper
+                )
+
+            elif cloud_config.get('type') == 's3':
+                # S3 upload (placeholder for future implementation)
+                success, message = self.cloud_storage_manager.upload_file_to_s3(
+                    file_path,
+                    cloud_config['endpoint_url'],
+                    cloud_config['access_key'],
+                    cloud_config['secret_key'],
+                    cloud_config['bucket_name'],
+                    remote_filename,
+                    cloud_config.get('region', 'us-east-1'),
+                    progress_wrapper
+                )
+            else:
+                return False, f"Unsupported cloud storage type: {cloud_config.get('type')}"
+
+            if success:
+                self.log(f"Cloud upload completed: {remote_filename}")
+                if progress_callback:
+                    progress_callback.setValue(100)
+                    progress_callback.setFormat(f"Upload completed: {remote_filename}")
+            else:
+                self.log(f"Cloud upload failed: {message}")
+
+            return success, message
+
+        except Exception as e:
+            error_msg = f"Cloud upload error: {str(e)}"
+            self.log(error_msg)
+            return False, error_msg
