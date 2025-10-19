@@ -406,7 +406,8 @@ def test_download_archive_with_progress_and_speed(export_manager, mock_api_manag
          patch('os.makedirs'), \
          patch('os.rename'), \
          patch('os.path.getsize', return_value=2 * 1024 * 1024), \
-         patch('time.time', side_effect=mock_time):
+         patch('time.time', side_effect=mock_time), \
+         patch('time.sleep'):  # Mock sleep to speed up tests
 
         result = export_manager.download_archive(
             asset_ids=["1", "2"],
@@ -442,7 +443,8 @@ def test_download_archive_speed_calculation_edge_cases(export_manager, mock_api_
          patch('os.makedirs'), \
          patch('os.rename'), \
          patch('os.path.getsize', return_value=2 * 1024 * 1024), \
-         patch('time.time', return_value=1000.0):  # Same time always
+         patch('time.time', return_value=1000.0), \
+         patch('time.sleep'):  # Mock sleep to speed up tests
 
         result = export_manager.download_archive(
             asset_ids=["1", "2"],
@@ -479,7 +481,8 @@ def test_download_archive_with_album_id(export_manager, mock_api_manager, mock_l
          patch('src.managers.export_manager.ExportManager.log'), \
          patch.object(export_manager, 'get_album_assets', return_value=['asset1', 'asset2']), \
          patch.object(export_manager, 'can_resume_download', return_value=(False, 0)), \
-         patch.object(export_manager, 'check_range_header_support', return_value=True):
+         patch.object(export_manager, 'check_range_header_support', return_value=True), \
+         patch('time.sleep'):  # Mock sleep to speed up tests
 
         result = export_manager.download_archive(
             album_id="album123",
