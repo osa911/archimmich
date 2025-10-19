@@ -4,7 +4,7 @@
 CONFIG_FILE = "config.json"
 
 # Version
-VERSION = "0.3.0"
+VERSION = "0.3.1"
 
 # UI Constants
 WINDOW_WIDTH = 760
