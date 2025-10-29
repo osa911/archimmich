@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [v0.3.1] - 2025-10-19
+
+### Fixed
+
+- **Windows File Handling**: Enhanced file handling in ExportManager during download completion on Windows to improve reliability and prevent file corruption issues when windows defender enabled or any other antivirus software is enabled.
+
 ## [v0.3.0] - Cloud Storage Integration - 2025-09-28
 
 ### ☁️ **Export Directly to Cloud Storage**
