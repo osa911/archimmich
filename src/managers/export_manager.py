@@ -661,41 +661,101 @@ class ExportManager:
 
                                 QApplication.processEvents()
 
-                        # Download completed successfully
+                        # Download completed successfully - update UI immediately for better UX
                         if not self.stop_flag() and self.login_manager.is_logged_in():
                             current_download_progress_bar.setValue(100)
                             current_download_progress_bar.setFormat(f"Current Download: {bucket_name} - 100%")
 
-                            # Move partial file to final location
-                            if os.path.exists(archive_path):
-                                os.remove(archive_path)
-                            os.rename(partial_archive_path, archive_path)
+                        # Ensure all data is flushed to disk before closing (important for Windows)
+                        archive_file.flush()
+                        try:
+                            os.fsync(archive_file.fileno())
+                        except (OSError, AttributeError, TypeError, ValueError):
+                            # fsync may not be supported on all file objects (e.g., mocked files in tests)
+                            # TypeError: fileno() returned a non-integer
+                            # ValueError: invalid file descriptor
+                            pass
 
-                            # Clean up resume metadata
-                            self.cleanup_resume_metadata(bucket_name)
+                    # File is now closed (exited the 'with' block)
+                    # Now safe to rename on Windows - file handles are released
+                    if not self.stop_flag() and self.login_manager.is_logged_in():
 
-                            final_size = os.path.getsize(archive_path)
-                            self.log(f"Download completed: {bucket_name}.zip ({self.format_size(final_size)})")
+                        # Move partial file to final location with retry logic for Windows
+                        rename_success = False
+                        max_retries = 10
+                        retry_delay = 0.5  # 500ms
 
-                    if actual_resume:
-                        self.log(f"Resume session downloaded: {self.format_size(session_downloaded)} additional bytes")
+                        for retry in range(max_retries):
+                            try:
+                                self.log(f"Attempting to rename: {partial_archive_path} -> {archive_path}")
+                                # Remove existing file if present
+                                if os.path.exists(archive_path):
+                                    self.log(f"Removing existing file: {archive_path}")
+                                    try:
+                                        os.remove(archive_path)
+                                        self.log(f"Existing file removed: {archive_path}")
+                                    except PermissionError:
+                                        # If we can't remove it, wait and try again
+                                        if retry < max_retries - 1:
+                                            time.sleep(retry_delay)
+                                            self.log(f"Waiting for file to be released: {archive_path}")
+                                            continue
+                                        else:
+                                            raise
 
-                    # Verify file size matches expected with smart tolerance
-                    size_difference = abs(final_size - total_size)
+                                # Attempt to rename the partial file
+                                os.rename(partial_archive_path, archive_path)
+                                self.log(f"Partial file renamed: {partial_archive_path} -> {archive_path}")
+                                rename_success = True
+                                break
 
-                    # Calculate smart tolerance: minimum 1KB or 0.1% of file size, whichever is larger
-                    min_tolerance = 1024  # 1KB minimum
-                    percentage_tolerance = max(min_tolerance, int(total_size * 0.001))  # 0.1% of file size
+                            except (PermissionError, OSError) as rename_error:
+                                if retry < max_retries - 1:
+                                    # Wait before retrying (Windows file locking issue)
+                                    self.log(f"Waiting before retrying: {retry_delay} seconds")
+                                    time.sleep(retry_delay)
+                                else:
+                                    # Final retry failed
+                                    raise rename_error
 
-                    if size_difference > percentage_tolerance:
-                        self.log(f"WARNING: File size mismatch! Expected: {self.format_size(total_size)} ({total_size:,} bytes), Got: {self.format_size(final_size)} ({final_size:,} bytes)")
-                        self.log(f"Difference: {self.format_size(size_difference)} ({size_difference:,} bytes), Tolerance: {self.format_size(percentage_tolerance)} ({percentage_tolerance:,} bytes)")
+                        if not rename_success:
+                            self.log(f"ERROR: Failed to finalize {bucket_name}.zip after {max_retries} retries")
+                            self.log(f"The download completed successfully, but couldn't rename the file.")
+                            self.log(f"You can manually rename '{bucket_name}.zip.partial' to '{bucket_name}.zip' in your output directory.")
+                            return "error"
 
+                        # Clean up resume metadata
+                        self.cleanup_resume_metadata(bucket_name)
 
-                    return "completed"
+                        final_size = os.path.getsize(archive_path)
+                        self.log(f"Download completed: {bucket_name}.zip ({self.format_size(final_size)})")
+
+                        if actual_resume:
+                            self.log(f"Resume session downloaded: {self.format_size(session_downloaded)} additional bytes")
+
+                        # Verify file size matches expected with smart tolerance
+                        size_difference = abs(final_size - total_size)
+
+                        # Calculate smart tolerance: minimum 1KB or 0.1% of file size, whichever is larger
+                        min_tolerance = 1024  # 1KB minimum
+                        percentage_tolerance = max(min_tolerance, int(total_size * 0.001))  # 0.1% of file size
+
+                        if size_difference > percentage_tolerance:
+                            self.log(f"WARNING: File size mismatch! Expected: {self.format_size(total_size)} ({total_size:,} bytes), Got: {self.format_size(final_size)} ({final_size:,} bytes)")
+                            self.log(f"Difference: {self.format_size(size_difference)} ({size_difference:,} bytes), Tolerance: {self.format_size(percentage_tolerance)} ({percentage_tolerance:,} bytes)")
+
+                        return "completed"
 
             except Exception as e:
-                self.log(f"Error during download of {bucket_name}.zip: {str(e)}")
+                error_msg = str(e)
+                self.log(f"Error during download of {bucket_name}.zip: {error_msg}")
+
+                # Provide helpful guidance if it's a file rename/permission issue
+                if "WinError 32" in error_msg or "PermissionError" in str(type(e)) or "being used by another process" in error_msg:
+                    self.log(f"This appears to be a file locking issue (common on Windows).")
+                    self.log(f"The file '{bucket_name}.zip.partial' may still exist in your output directory.")
+                    self.log(f"You can manually rename it to '{bucket_name}.zip' once the file is no longer locked.")
+
                 # Don't clean up partial download on error - allow resume
                 return "error"
 

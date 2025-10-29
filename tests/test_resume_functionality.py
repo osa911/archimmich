@@ -268,7 +268,8 @@ class TestDownloadResume:
              patch('os.path.exists', return_value=False), \
              patch('os.makedirs'), \
              patch('os.rename'), \
-             patch('os.path.getsize', return_value=12):  # Mock final file size
+             patch('os.path.getsize', return_value=12), \
+             patch('time.sleep'):  # Mock final file size
 
             result = export_manager.download_archive(
                 ["id1", "id2"], "test_archive", 2048, mock_progress_bar
@@ -309,7 +310,8 @@ class TestDownloadResume:
 
         with patch('os.makedirs'), \
              patch('os.rename'), \
-             patch('os.path.getsize', return_value=total_size):  # Mock final file size
+             patch('os.path.getsize', return_value=total_size), \
+             patch('time.sleep'):  # Mock sleep to speed up tests
 
             result = export_manager.download_archive(
                 asset_ids, archive_name, total_size, mock_progress_bar
