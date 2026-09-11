@@ -485,6 +485,7 @@ def test_download_archive_with_album_id(export_manager, mock_api_manager, mock_l
          patch('time.sleep'):  # Mock sleep to speed up tests
 
         result = export_manager.download_archive(
+            asset_ids=["asset1", "asset2"],
             album_id="album123",
             bucket_name="test_album",
             total_size=2048,
@@ -499,6 +500,7 @@ def test_download_archive_with_album_id(export_manager, mock_api_manager, mock_l
             expected_type=None,
             headers={}
         )
+        export_manager.get_album_assets.assert_not_called()
 
         # Verify file operations
         mock_open.assert_called()
@@ -583,6 +585,36 @@ def test_get_albums_empty(export_manager, mock_api_manager):
 
     assert result == []
     mock_api_manager.get.assert_called_once_with("/albums", expected_type=list)
+
+
+def test_get_album_assets_from_album_data(export_manager, mock_api_manager):
+    """Test fetching assets from the legacy album response shape."""
+    mock_api_manager.get.return_value = {
+        "assets": [{"id": "asset1"}, {"id": "asset2"}]
+    }
+
+    result = export_manager.get_album_assets("album1")
+
+    assert result == ["asset1", "asset2"]
+    mock_api_manager.get.assert_called_once_with("/albums/album1", expected_type=dict)
+    mock_api_manager.post.assert_not_called()
+
+
+def test_get_album_assets_from_metadata_search(export_manager, mock_api_manager):
+    """Test fetching assets from the current Immich metadata search response."""
+    mock_api_manager.get.return_value = {"id": "album1", "assetCount": 2}
+    mock_api_manager.post.return_value = {
+        "assets": [{"id": "asset1"}, {"id": "asset2"}]
+    }
+
+    result = export_manager.get_album_assets("album1")
+
+    assert result == ["asset1", "asset2"]
+    mock_api_manager.post.assert_called_once_with(
+        "/search/metadata",
+        json_data={"albumIds": ["album1"], "size": 1000, "page": 1},
+        expected_type=dict
+    )
 
 
 # Cloud Storage Tests
