@@ -412,8 +412,7 @@ class ExportManager:
 
             payload = {}
             if album_id:
-                # For albums, we need to fetch the asset IDs first
-                album_asset_ids = self.get_album_assets(album_id)
+                album_asset_ids = asset_ids or self.get_album_assets(album_id)
                 if not album_asset_ids:
                     self.log(f"No assets found for album {album_id}")
                     return "error"
@@ -843,7 +842,6 @@ class ExportManager:
     def get_album_assets(self, album_id):
         """Get assets for a specific album."""
         try:
-            # Try the album detail endpoint which might include assets
             response = self.api_manager.get(f"/albums/{album_id}", expected_type=dict)
             if not response:
                 self.log(f"No album data returned for album {album_id}")
@@ -863,8 +861,20 @@ class ExportManager:
             if 'assetIds' in response and isinstance(response['assetIds'], list):
                 return response['assetIds']
 
-            self.log(f"No assets found in album data for {album_id}")
-            return []
+            search_response = self.api_manager.post(
+                "/search/metadata",
+                json_data={"albumIds": [album_id], "size": 1000, "page": 1},
+                expected_type=dict
+            )
+            if not search_response or not isinstance(search_response.get('assets'), list):
+                self.log(f"No assets found in album data for {album_id}")
+                return []
+
+            asset_ids = [
+                asset['id'] for asset in search_response['assets']
+                if isinstance(asset, dict) and asset.get('id')
+            ]
+            return asset_ids
 
         except Exception as e:
             self.log(f"Failed to fetch assets for album {album_id}: {str(e)}")
